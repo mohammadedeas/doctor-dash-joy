@@ -31,6 +31,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { state } = useClinic();
   const { pathname } = useLocation();
 
+  const isActive = (item: NavItem) =>
+    item.exact
+      ? pathname === item.to
+      : pathname === item.to || pathname.startsWith(item.to + "/");
+
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[260px_1fr]">
       <aside className="hidden lg:flex flex-col border-r border-border bg-sidebar">
@@ -51,14 +56,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
         <nav className="flex-1 px-3 py-4 space-y-0.5">
           {NAV.map((item) => {
-            const active = item.exact
-              ? pathname === item.to
-              : pathname === item.to || pathname.startsWith(item.to + "/");
             const Icon = item.icon;
+            const active = isActive(item);
             return (
               <Link
                 key={item.to}
-                to={item.to}
+                to={item.to as never}
                 className={cn(
                   "flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors",
                   active
@@ -77,27 +80,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      {/* Mobile top bar */}
       <header className="lg:hidden sticky top-0 z-40 bg-sidebar border-b border-border">
         <div className="flex items-center justify-between px-4 h-14">
           <div className="flex items-center gap-2">
             <div className="size-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
               <Stethoscope className="size-4" />
             </div>
-            <span className="font-display font-semibold text-sm">
+            <span className="font-display font-semibold text-sm truncate">
               {state.settings.clinicName}
             </span>
           </div>
         </div>
         <nav className="flex overflow-x-auto px-2 pb-2 gap-1">
           {NAV.map((item) => {
-            const active = item.exact
-              ? pathname === item.to
-              : pathname === item.to || pathname.startsWith(item.to + "/");
+            const active = isActive(item);
             return (
               <Link
                 key={item.to}
-                to={item.to}
+                to={item.to as never}
                 className={cn(
                   "px-3 py-1.5 rounded-md text-xs whitespace-nowrap",
                   active
