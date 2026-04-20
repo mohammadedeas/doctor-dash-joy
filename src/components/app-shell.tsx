@@ -76,7 +76,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
         <div className="px-6 py-4 border-t border-border text-[11px] text-muted-foreground">
-          Data stored locally in your browser
+          Data stored on server (SQLite)
         </div>
       </aside>
 

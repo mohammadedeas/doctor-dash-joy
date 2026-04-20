@@ -1,26 +1,22 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { PageHeader } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useClinic } from "@/lib/clinic-store";
-import { defaultClinicState } from "@/lib/clinic-types";
-import { todayISO } from "@/lib/clinic-utils";
 import { toast } from "sonner";
-import { confirmDialog } from "@/components/confirm-dialog";
-import { Download, Upload, Trash2, Plus } from "lucide-react";
+import { Plus, X } from "lucide-react";
 
 export const Route = createFileRoute("/settings")({
   component: SettingsPage,
 });
 
 function SettingsPage() {
-  const { state, updateSettings, setProcedures, replaceAll, clearAll } = useClinic();
+  const { state, updateSettings, setProcedures } = useClinic();
   const [name, setName] = useState(state.settings.clinicName);
   const [currency, setCurrency] = useState(state.settings.currency);
-  const fileRef = useRef<HTMLInputElement>(null);
 
   function saveSettings() {
     updateSettings({
@@ -30,67 +26,6 @@ function SettingsPage() {
     toast.success("Settings saved");
   }
 
-  function exportJSON() {
-    const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `dental-clinic-backup-${todayISO()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success("Backup downloaded");
-  }
-
-  async function importJSON(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      const text = await file.text();
-      const data = JSON.parse(text);
-      if (!Array.isArray(data.patients)) throw new Error("Invalid format");
-      const ok = await confirmDialog({
-        title: "Import backup?",
-        description: `This will REPLACE current data with ${data.patients.length} patient(s), ${data.visits?.length || 0} visit(s), ${data.payments?.length || 0} payment(s).`,
-        destructive: true,
-        confirmLabel: "Replace data",
-      });
-      if (!ok) return;
-      replaceAll({
-        patients: data.patients,
-        visits: data.visits || [],
-        payments: data.payments || [],
-        settings: { ...defaultClinicState.settings, ...(data.settings || {}) },
-      });
-      setName(data.settings?.clinicName ?? defaultClinicState.settings.clinicName);
-      setCurrency(data.settings?.currency ?? defaultClinicState.settings.currency);
-      toast.success("Data imported");
-    } catch {
-      toast.error("Import failed: invalid file");
-    } finally {
-      if (fileRef.current) fileRef.current.value = "";
-    }
-  }
-
-  async function onClearAll() {
-    const a = await confirmDialog({
-      title: "Delete ALL data?",
-      description: "This permanently removes all patients, visits and payments.",
-      destructive: true,
-      confirmLabel: "Yes, delete",
-    });
-    if (!a) return;
-    const b = await confirmDialog({
-      title: "Are you absolutely sure?",
-      description: "This cannot be undone.",
-      destructive: true,
-      confirmLabel: "Delete everything",
-    });
-    if (!b) return;
-    clearAll();
-    setName(defaultClinicState.settings.clinicName);
-    setCurrency(defaultClinicState.settings.currency);
-    toast.success("All data cleared");
-  }
 
   function updateProc(i: number, patch: { name?: string; cost?: number }) {
     const next = state.settings.commonProcedures.map((p, idx) =>
@@ -104,8 +39,6 @@ function SettingsPage() {
   function removeProc(i: number) {
     setProcedures(state.settings.commonProcedures.filter((_, idx) => idx !== i));
   }
-
-  const storageKb = (JSON.stringify(state).length / 1024).toFixed(1);
 
   return (
     <>
@@ -158,7 +91,7 @@ function SettingsPage() {
                 size="icon"
                 onClick={() => removeProc(i)}
               >
-                <Trash2 className="size-4 text-destructive" />
+                <X className="size-4 text-destructive" />
               </Button>
             </div>
           ))}
@@ -168,38 +101,14 @@ function SettingsPage() {
         </div>
       </Card>
 
-      <Card className="p-5 mb-5">
-        <h3 className="font-semibold text-[15px] mb-2">Data management</h3>
-        <p className="text-sm text-muted-foreground mb-4">
-          All data is stored locally in your browser. Back up your data regularly.
-        </p>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={exportJSON}>
-            <Download className="size-4" /> Export backup (JSON)
-          </Button>
-          <Button variant="outline" onClick={() => fileRef.current?.click()}>
-            <Upload className="size-4" /> Import backup
-          </Button>
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".json"
-            className="hidden"
-            onChange={importJSON}
-          />
-          <Button variant="destructive" onClick={onClearAll}>
-            <Trash2 className="size-4" /> Clear all data
-          </Button>
-        </div>
-      </Card>
+
 
       <Card className="p-5">
-        <h3 className="font-semibold text-[15px] mb-4">Storage stats</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+        <h3 className="font-semibold text-[15px] mb-4">Database stats</h3>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
           <Stat label="Patients" value={state.patients.length} />
           <Stat label="Visits" value={state.visits.length} />
           <Stat label="Payments" value={state.payments.length} />
-          <Stat label="Storage used" value={`${storageKb} KB`} />
         </div>
       </Card>
     </>

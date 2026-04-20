@@ -17,28 +17,11 @@ import {
   type Visit,
 } from "./clinic-types";
 import { uid } from "./clinic-utils";
-
-const STORAGE_KEY = "dentalClinic.v1";
-
-function load(): ClinicState {
-  if (typeof window === "undefined") return structuredClone(defaultClinicState);
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return structuredClone(defaultClinicState);
-    const parsed = JSON.parse(raw) as Partial<ClinicState>;
-    return {
-      patients: parsed.patients || [],
-      visits: parsed.visits || [],
-      payments: parsed.payments || [],
-      settings: { ...defaultClinicState.settings, ...(parsed.settings || {}) },
-    };
-  } catch {
-    return structuredClone(defaultClinicState);
-  }
-}
+import * as api from "./api-client";
 
 type Ctx = {
   state: ClinicState;
+  loading: boolean;
   // patients
   upsertPatient: (data: Omit<Patient, "id" | "createdAt"> & { id?: string }) => Patient;
   deletePatient: (id: string) => void;
@@ -53,34 +36,33 @@ type Ctx = {
   setProcedures: (procs: Procedure[]) => void;
   // bulk
   replaceAll: (next: ClinicState) => void;
-  clearAll: () => void;
 };
 
 const ClinicContext = createContext<Ctx | null>(null);
 
 export function ClinicProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<ClinicState>(() => load());
-  const [hydrated, setHydrated] = useState(false);
+  const [state, setState] = useState<ClinicState>(() => structuredClone(defaultClinicState));
+  const [loading, setLoading] = useState(true);
 
-  // Re-hydrate from localStorage on mount (in case SSR returned defaults)
+  // Fetch full state from backend on mount
   useEffect(() => {
-    setState(load());
-    setHydrated(true);
+    api
+      .fetchState()
+      .then((data) => {
+        setState(data);
+      })
+      .catch((err) => {
+        console.error("Failed to load state from backend:", err);
+      })
+      .finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => {
-    if (!hydrated) return;
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    } catch {
-      /* ignore quota */
-    }
-  }, [state, hydrated]);
-
+  // ── Patients ────────────────────────────────────────────────────
   const upsertPatient: Ctx["upsertPatient"] = useCallback((data) => {
     let result!: Patient;
-    setState((s) => {
-      if (data.id) {
+    if (data.id) {
+      // Update existing — optimistic update
+      setState((s) => {
         const i = s.patients.findIndex((p) => p.id === data.id);
         if (i === -1) return s;
         const updated = { ...s.patients[i], ...data, id: data.id } as Patient;
@@ -88,14 +70,30 @@ export function ClinicProvider({ children }: { children: ReactNode }) {
         const next = s.patients.slice();
         next[i] = updated;
         return { ...s, patients: next };
-      }
+      });
+      // Persist to backend
+      api.updatePatient(data.id, data).catch((err) => console.error("Update patient failed:", err));
+    } else {
+      // Create new — optimistic with temp id
       result = {
         id: uid(),
         createdAt: new Date().toISOString(),
         ...data,
       } as Patient;
-      return { ...s, patients: [...s.patients, result] };
-    });
+      const tempId = result.id;
+      setState((s) => ({ ...s, patients: [...s.patients, result] }));
+      // Persist to backend — replace temp id with server id
+      api
+        .createPatient(data)
+        .then((serverPatient) => {
+          setState((s) => ({
+            ...s,
+            patients: s.patients.map((p) => (p.id === tempId ? serverPatient : p)),
+          }));
+          result = serverPatient;
+        })
+        .catch((err) => console.error("Create patient failed:", err));
+    }
     return result;
   }, []);
 
@@ -106,12 +104,14 @@ export function ClinicProvider({ children }: { children: ReactNode }) {
       visits: s.visits.filter((v) => v.patientId !== id),
       payments: s.payments.filter((p) => p.patientId !== id),
     }));
+    api.deletePatient(id).catch((err) => console.error("Delete patient failed:", err));
   }, []);
 
+  // ── Visits ──────────────────────────────────────────────────────
   const upsertVisit: Ctx["upsertVisit"] = useCallback((data) => {
     let result!: Visit;
-    setState((s) => {
-      if (data.id) {
+    if (data.id) {
+      setState((s) => {
         const i = s.visits.findIndex((v) => v.id === data.id);
         if (i === -1) return s;
         const updated = { ...s.visits[i], ...data, id: data.id } as Visit;
@@ -119,10 +119,23 @@ export function ClinicProvider({ children }: { children: ReactNode }) {
         const next = s.visits.slice();
         next[i] = updated;
         return { ...s, visits: next };
-      }
+      });
+      api.updateVisit(data.id, data).catch((err) => console.error("Update visit failed:", err));
+    } else {
       result = { id: uid(), ...data } as Visit;
-      return { ...s, visits: [...s.visits, result] };
-    });
+      const tempId = result.id;
+      setState((s) => ({ ...s, visits: [...s.visits, result] }));
+      api
+        .createVisit(data)
+        .then((serverVisit) => {
+          setState((s) => ({
+            ...s,
+            visits: s.visits.map((v) => (v.id === tempId ? serverVisit : v)),
+          }));
+          result = serverVisit;
+        })
+        .catch((err) => console.error("Create visit failed:", err));
+    }
     return result;
   }, []);
 
@@ -132,12 +145,14 @@ export function ClinicProvider({ children }: { children: ReactNode }) {
       visits: s.visits.filter((v) => v.id !== id),
       payments: s.payments.filter((p) => p.visitId !== id),
     }));
+    api.deleteVisit(id).catch((err) => console.error("Delete visit failed:", err));
   }, []);
 
+  // ── Payments ────────────────────────────────────────────────────
   const upsertPayment: Ctx["upsertPayment"] = useCallback((data) => {
     let result!: Payment;
-    setState((s) => {
-      if (data.id) {
+    if (data.id) {
+      setState((s) => {
         const i = s.payments.findIndex((p) => p.id === data.id);
         if (i === -1) return s;
         const updated = { ...s.payments[i], ...data, id: data.id } as Payment;
@@ -145,34 +160,56 @@ export function ClinicProvider({ children }: { children: ReactNode }) {
         const next = s.payments.slice();
         next[i] = updated;
         return { ...s, payments: next };
-      }
+      });
+      api.updatePayment(data.id, data).catch((err) => console.error("Update payment failed:", err));
+    } else {
       result = { id: uid(), ...data } as Payment;
-      return { ...s, payments: [...s.payments, result] };
-    });
+      const tempId = result.id;
+      setState((s) => ({ ...s, payments: [...s.payments, result] }));
+      api
+        .createPayment(data)
+        .then((serverPayment) => {
+          setState((s) => ({
+            ...s,
+            payments: s.payments.map((p) => (p.id === tempId ? serverPayment : p)),
+          }));
+          result = serverPayment;
+        })
+        .catch((err) => console.error("Create payment failed:", err));
+    }
     return result;
   }, []);
 
   const deletePayment: Ctx["deletePayment"] = useCallback((id) => {
     setState((s) => ({ ...s, payments: s.payments.filter((p) => p.id !== id) }));
+    api.deletePaymentApi(id).catch((err) => console.error("Delete payment failed:", err));
   }, []);
 
+  // ── Settings ────────────────────────────────────────────────────
   const updateSettings: Ctx["updateSettings"] = useCallback((patch) => {
     setState((s) => ({ ...s, settings: { ...s.settings, ...patch } }));
+    api.updateSettingsApi(patch).catch((err) => console.error("Update settings failed:", err));
   }, []);
 
   const setProcedures: Ctx["setProcedures"] = useCallback((procs) => {
     setState((s) => ({ ...s, settings: { ...s.settings, commonProcedures: procs } }));
+    api
+      .updateSettingsApi({ commonProcedures: procs })
+      .catch((err) => console.error("Update procedures failed:", err));
   }, []);
 
-  const replaceAll: Ctx["replaceAll"] = useCallback((next) => setState(next), []);
-  const clearAll: Ctx["clearAll"] = useCallback(
-    () => setState(structuredClone(defaultClinicState)),
-    []
-  );
+  // ── Bulk ────────────────────────────────────────────────────────
+  const replaceAll: Ctx["replaceAll"] = useCallback((next) => {
+    setState(next);
+    api.replaceState(next).catch((err) => console.error("Replace state failed:", err));
+  }, []);
+
+
 
   const value = useMemo<Ctx>(
     () => ({
       state,
+      loading,
       upsertPatient,
       deletePatient,
       upsertVisit,
@@ -182,10 +219,10 @@ export function ClinicProvider({ children }: { children: ReactNode }) {
       updateSettings,
       setProcedures,
       replaceAll,
-      clearAll,
     }),
     [
       state,
+      loading,
       upsertPatient,
       deletePatient,
       upsertVisit,
@@ -195,7 +232,6 @@ export function ClinicProvider({ children }: { children: ReactNode }) {
       updateSettings,
       setProcedures,
       replaceAll,
-      clearAll,
     ]
   );
 
