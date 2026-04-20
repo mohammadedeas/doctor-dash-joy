@@ -40,19 +40,33 @@ type Ctx = {
 
 const ClinicContext = createContext<Ctx | null>(null);
 
+const STORAGE_KEY = "clinic_os_state";
+
 export function ClinicProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<ClinicState>(() => structuredClone(defaultClinicState));
+  const [state, setState] = useState<ClinicState>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return structuredClone(defaultClinicState);
+  });
   const [loading, setLoading] = useState(true);
+
+  // Sync state to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }, [state]);
 
   // Fetch full state from backend on mount
   useEffect(() => {
     api
       .fetchState()
       .then((data) => {
+        // Merge backend data over local data
         setState(data);
       })
       .catch((err) => {
-        console.error("Failed to load state from backend:", err);
+        console.error("Failed to load state from backend, using local storage:", err);
       })
       .finally(() => setLoading(false));
   }, []);
