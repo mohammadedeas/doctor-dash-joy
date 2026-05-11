@@ -18,8 +18,7 @@
     "format": "prettier --write .",
     "build:server": "esbuild server/index.ts --bundle --platform=node --format=cjs --outfile=server/dist/index.cjs",
     "electron:dev": "concurrently -n vite,server,electron -c blue,green,yellow \"npm run dev\" \"npm run server\" \"wait-on tcp:8080 && electron .\"",
-    "electron:build": "npm run build && npm run build:server && electron-builder",
-    "postinstall": "electron-rebuild -f -w better-sqlite3"
+    "electron:build": "npm run build && npm run build:server && electron-builder"
   },
   "build": {
     "appId": "com.clinicos.app",

@@ -18,7 +18,7 @@ router.get("/", async (_req: Request, res: Response) => {
 // ── Get single patient ──────────────────────────────────────────────
 router.get("/:id", async (req: Request, res: Response) => {
   try {
-    const rs = await db.execute({ sql: "SELECT * FROM patients WHERE id = ?", args: [req.params.id] });
+    const rs = await db.execute({ sql: "SELECT * FROM patients WHERE id = ?", args: [req.params.id as string] });
     const row = rs.rows[0];
     if (!row) return res.status(404).json({ error: "Patient not found" });
     res.json(mapRow(row));
@@ -54,7 +54,7 @@ router.post("/", async (req: Request, res: Response) => {
 // ── Update patient ──────────────────────────────────────────────────
 router.put("/:id", async (req: Request, res: Response) => {
   try {
-    const rsEx = await db.execute({ sql: "SELECT * FROM patients WHERE id = ?", args: [req.params.id] });
+    const rsEx = await db.execute({ sql: "SELECT * FROM patients WHERE id = ?", args: [req.params.id as string] });
     const existing = rsEx.rows[0];
     if (!existing) return res.status(404).json({ error: "Patient not found" });
 
@@ -73,11 +73,11 @@ router.put("/:id", async (req: Request, res: Response) => {
         gender ?? existing.gender,
         address ?? existing.address,
         medicalNotes ?? existing.medical_notes,
-        req.params.id
+        req.params.id as string
       ]
     });
 
-    const rs = await db.execute({ sql: "SELECT * FROM patients WHERE id = ?", args: [req.params.id] });
+    const rs = await db.execute({ sql: "SELECT * FROM patients WHERE id = ?", args: [req.params.id as string] });
     res.json(mapRow(rs.rows[0]));
   } catch (err) {
     res.status(500).json({ error: String(err) });
@@ -87,10 +87,10 @@ router.put("/:id", async (req: Request, res: Response) => {
 // ── Delete patient (cascades visits & payments) ─────────────────────
 router.delete("/:id", async (req: Request, res: Response) => {
   try {
-    const rsEx = await db.execute({ sql: "SELECT * FROM patients WHERE id = ?", args: [req.params.id] });
+    const rsEx = await db.execute({ sql: "SELECT * FROM patients WHERE id = ?", args: [req.params.id as string] });
     if (!rsEx.rows[0]) return res.status(404).json({ error: "Patient not found" });
 
-    await db.execute({ sql: "DELETE FROM patients WHERE id = ?", args: [req.params.id] });
+    await db.execute({ sql: "DELETE FROM patients WHERE id = ?", args: [req.params.id as string] });
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: String(err) });

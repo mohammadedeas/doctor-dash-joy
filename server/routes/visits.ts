@@ -18,7 +18,7 @@ router.get("/", async (_req: Request, res: Response) => {
 // ── Get single visit ────────────────────────────────────────────────
 router.get("/:id", async (req: Request, res: Response) => {
   try {
-    const rs = await db.execute({ sql: "SELECT * FROM visits WHERE id = ?", args: [req.params.id] });
+    const rs = await db.execute({ sql: "SELECT * FROM visits WHERE id = ?", args: [req.params.id as string] });
     const row = rs.rows[0];
     if (!row) return res.status(404).json({ error: "Visit not found" });
     res.json(await enrichVisit(row));
@@ -62,7 +62,7 @@ router.post("/", async (req: Request, res: Response) => {
 // ── Update visit ────────────────────────────────────────────────────
 router.put("/:id", async (req: Request, res: Response) => {
   try {
-    const rsEx = await db.execute({ sql: "SELECT * FROM visits WHERE id = ?", args: [req.params.id] });
+    const rsEx = await db.execute({ sql: "SELECT * FROM visits WHERE id = ?", args: [req.params.id as string] });
     const existing = rsEx.rows[0];
     if (!existing) return res.status(404).json({ error: "Visit not found" });
 
@@ -77,12 +77,12 @@ router.put("/:id", async (req: Request, res: Response) => {
           date ?? existing.date,
           totalCost ?? existing.total_cost,
           notes ?? existing.notes,
-          req.params.id
+          req.params.id as string
         ]
       });
 
       if (Array.isArray(procedures)) {
-        await tx.execute({ sql: "DELETE FROM visit_procedures WHERE visit_id = ?", args: [req.params.id] });
+        await tx.execute({ sql: "DELETE FROM visit_procedures WHERE visit_id = ?", args: [req.params.id as string] });
         for (const proc of procedures) {
           await tx.execute({
             sql: "INSERT INTO visit_procedures (visit_id, name, cost) VALUES (?, ?, ?)",
@@ -92,7 +92,7 @@ router.put("/:id", async (req: Request, res: Response) => {
       }
       await tx.commit();
 
-      const rs = await db.execute({ sql: "SELECT * FROM visits WHERE id = ?", args: [req.params.id] });
+      const rs = await db.execute({ sql: "SELECT * FROM visits WHERE id = ?", args: [req.params.id as string] });
       res.json(await enrichVisit(rs.rows[0]));
     } catch (err) {
       await tx.rollback();
@@ -106,13 +106,13 @@ router.put("/:id", async (req: Request, res: Response) => {
 // ── Delete visit (+ cascade payments for this visit) ────────────────
 router.delete("/:id", async (req: Request, res: Response) => {
   try {
-    const rsEx = await db.execute({ sql: "SELECT * FROM visits WHERE id = ?", args: [req.params.id] });
+    const rsEx = await db.execute({ sql: "SELECT * FROM visits WHERE id = ?", args: [req.params.id as string] });
     if (!rsEx.rows[0]) return res.status(404).json({ error: "Visit not found" });
 
     const tx = await db.transaction("write");
     try {
-      await tx.execute({ sql: "DELETE FROM payments WHERE visit_id = ?", args: [req.params.id] });
-      await tx.execute({ sql: "DELETE FROM visits WHERE id = ?", args: [req.params.id] });
+      await tx.execute({ sql: "DELETE FROM payments WHERE visit_id = ?", args: [req.params.id as string] });
+      await tx.execute({ sql: "DELETE FROM visits WHERE id = ?", args: [req.params.id as string] });
       await tx.commit();
       res.json({ success: true });
     } catch (err) {

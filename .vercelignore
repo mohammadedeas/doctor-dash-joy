@@ -1,0 +1,13 @@
+node_modules
+dist
+server/dist
+dist-electron
+app.asar.unpacked
+Clinic OS
+temp-asar
+winCodeSign.7z
+*.db
+*.db-wal
+*.db-shm
+.env
+.vercel
