@@ -26,7 +26,7 @@ async function main() {
   try {
     // 1. Initialize schema on cloud
     console.log("Initializing Schema on Cloud...");
-    await cloudDb.executeMultiple(\`
+    await cloudDb.executeMultiple(`
       CREATE TABLE IF NOT EXISTS patients (
         id          TEXT PRIMARY KEY,
         name        TEXT NOT NULL,
@@ -71,7 +71,7 @@ async function main() {
         key   TEXT PRIMARY KEY,
         value TEXT NOT NULL
       );
-    \`);
+    `);
 
     // Clear cloud DB before migrating
     console.log("Clearing existing cloud data...");
@@ -132,7 +132,7 @@ async function main() {
     }
 
     console.log("✅ Migration completed successfully!");
-    console.log(\`Total Migrated: \${patients.rows.length} Patients, \${visits.rows.length} Visits, \${payments.rows.length} Payments.\`);
+    console.log(`Total Migrated: ${patients.rows.length} Patients, ${visits.rows.length} Visits, ${payments.rows.length} Payments.`);
 
   } catch (err) {
     console.error("❌ Migration failed:", err);
