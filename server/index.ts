@@ -48,9 +48,14 @@ if (fs.existsSync(staticDir)) {
   console.log(`[server] No static files found at ${staticDir}. Run 'npm run build' first if in production.`);
 }
 
-// Start server
-initDB()
-  .then(() => {
+// Initialize DB and export app for Vercel
+const initPromise = initDB().catch(err => {
+  console.error("[server] Failed to initialize database:", err);
+});
+
+// Start server only if not in a serverless environment (e.g. local dev, Electron)
+if (process.env.NODE_ENV !== "production" || !process.env.VERCEL) {
+  initPromise.then(() => {
     app.listen(PORT, () => {
       console.log(`\n  🏥 Clinic API server running at http://localhost:${PORT}`);
       console.log(`  📋 Endpoints:`);
@@ -63,8 +68,7 @@ initDB()
         console.log(`  🌐 Frontend served from: ${staticDir}\n`);
       }
     });
-  })
-  .catch((err) => {
-    console.error("[server] Failed to initialize database:", err);
-    process.exit(1);
   });
+}
+
+export default app;
