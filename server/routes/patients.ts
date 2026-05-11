@@ -5,68 +5,96 @@ import { randomUUID } from "crypto";
 const router = Router();
 
 // ── List all patients ───────────────────────────────────────────────
-router.get("/", (_req: Request, res: Response) => {
-  const rows = db.prepare("SELECT * FROM patients ORDER BY name ASC").all() as any[];
-  const patients = rows.map(mapRow);
-  res.json(patients);
+router.get("/", async (_req: Request, res: Response) => {
+  try {
+    const rs = await db.execute("SELECT * FROM patients ORDER BY name ASC");
+    const patients = rs.rows.map(mapRow);
+    res.json(patients);
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
 });
 
 // ── Get single patient ──────────────────────────────────────────────
-router.get("/:id", (req: Request, res: Response) => {
-  const row = db.prepare("SELECT * FROM patients WHERE id = ?").get(req.params.id) as any;
-  if (!row) return res.status(404).json({ error: "Patient not found" });
-  res.json(mapRow(row));
+router.get("/:id", async (req: Request, res: Response) => {
+  try {
+    const rs = await db.execute({ sql: "SELECT * FROM patients WHERE id = ?", args: [req.params.id] });
+    const row = rs.rows[0];
+    if (!row) return res.status(404).json({ error: "Patient not found" });
+    res.json(mapRow(row));
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
 });
 
 // ── Create patient ──────────────────────────────────────────────────
-router.post("/", (req: Request, res: Response) => {
+router.post("/", async (req: Request, res: Response) => {
   const { name, phone, email, dob, gender, address, medicalNotes } = req.body;
   if (!name) return res.status(400).json({ error: "Name is required" });
 
   const id = randomUUID().slice(0, 12);
   const createdAt = new Date().toISOString();
 
-  db.prepare(`
-    INSERT INTO patients (id, name, phone, email, dob, gender, address, medical_notes, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, name, phone || "", email || "", dob || "", gender || "", address || "", medicalNotes || "", createdAt);
+  try {
+    await db.execute({
+      sql: `
+        INSERT INTO patients (id, name, phone, email, dob, gender, address, medical_notes, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      args: [id, name, phone || "", email || "", dob || "", gender || "", address || "", medicalNotes || "", createdAt]
+    });
 
-  const row = db.prepare("SELECT * FROM patients WHERE id = ?").get(id) as any;
-  res.status(201).json(mapRow(row));
+    const rs = await db.execute({ sql: "SELECT * FROM patients WHERE id = ?", args: [id] });
+    res.status(201).json(mapRow(rs.rows[0]));
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
 });
 
 // ── Update patient ──────────────────────────────────────────────────
-router.put("/:id", (req: Request, res: Response) => {
-  const existing = db.prepare("SELECT * FROM patients WHERE id = ?").get(req.params.id) as any;
-  if (!existing) return res.status(404).json({ error: "Patient not found" });
+router.put("/:id", async (req: Request, res: Response) => {
+  try {
+    const rsEx = await db.execute({ sql: "SELECT * FROM patients WHERE id = ?", args: [req.params.id] });
+    const existing = rsEx.rows[0];
+    if (!existing) return res.status(404).json({ error: "Patient not found" });
 
-  const { name, phone, email, dob, gender, address, medicalNotes } = req.body;
+    const { name, phone, email, dob, gender, address, medicalNotes } = req.body;
 
-  db.prepare(`
-    UPDATE patients SET name = ?, phone = ?, email = ?, dob = ?, gender = ?, address = ?, medical_notes = ?
-    WHERE id = ?
-  `).run(
-    name ?? existing.name,
-    phone ?? existing.phone,
-    email ?? existing.email,
-    dob ?? existing.dob,
-    gender ?? existing.gender,
-    address ?? existing.address,
-    medicalNotes ?? existing.medical_notes,
-    req.params.id
-  );
+    await db.execute({
+      sql: `
+        UPDATE patients SET name = ?, phone = ?, email = ?, dob = ?, gender = ?, address = ?, medical_notes = ?
+        WHERE id = ?
+      `,
+      args: [
+        name ?? existing.name,
+        phone ?? existing.phone,
+        email ?? existing.email,
+        dob ?? existing.dob,
+        gender ?? existing.gender,
+        address ?? existing.address,
+        medicalNotes ?? existing.medical_notes,
+        req.params.id
+      ]
+    });
 
-  const row = db.prepare("SELECT * FROM patients WHERE id = ?").get(req.params.id) as any;
-  res.json(mapRow(row));
+    const rs = await db.execute({ sql: "SELECT * FROM patients WHERE id = ?", args: [req.params.id] });
+    res.json(mapRow(rs.rows[0]));
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
 });
 
 // ── Delete patient (cascades visits & payments) ─────────────────────
-router.delete("/:id", (req: Request, res: Response) => {
-  const existing = db.prepare("SELECT * FROM patients WHERE id = ?").get(req.params.id) as any;
-  if (!existing) return res.status(404).json({ error: "Patient not found" });
+router.delete("/:id", async (req: Request, res: Response) => {
+  try {
+    const rsEx = await db.execute({ sql: "SELECT * FROM patients WHERE id = ?", args: [req.params.id] });
+    if (!rsEx.rows[0]) return res.status(404).json({ error: "Patient not found" });
 
-  db.prepare("DELETE FROM patients WHERE id = ?").run(req.params.id);
-  res.json({ success: true });
+    await db.execute({ sql: "DELETE FROM patients WHERE id = ?", args: [req.params.id] });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
 });
 
 // ── Helper ──────────────────────────────────────────────────────────

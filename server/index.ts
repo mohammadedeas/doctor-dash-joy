@@ -6,6 +6,7 @@ import patientsRouter from "./routes/patients.js";
 import visitsRouter from "./routes/visits.js";
 import paymentsRouter from "./routes/payments.js";
 import settingsRouter from "./routes/settings.js";
+import { initDB } from "./db.js";
 
 // __dirname is available natively in CJS; this shim keeps it working in ESM dev mode too
 const __filename_esm = typeof __filename !== "undefined" ? __filename : fileURLToPath(import.meta.url);
@@ -48,15 +49,22 @@ if (fs.existsSync(staticDir)) {
 }
 
 // Start server
-app.listen(PORT, () => {
-  console.log(`\n  🏥 Clinic API server running at http://localhost:${PORT}`);
-  console.log(`  📋 Endpoints:`);
-  console.log(`     GET    /api/settings/state   — Full state`);
-  console.log(`     CRUD   /api/patients`);
-  console.log(`     CRUD   /api/visits`);
-  console.log(`     CRUD   /api/payments`);
-  console.log(`     GET/PUT /api/settings\n`);
-  if (staticDir) {
-    console.log(`  🌐 Frontend served from: ${staticDir}\n`);
-  }
-});
+initDB()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`\n  🏥 Clinic API server running at http://localhost:${PORT}`);
+      console.log(`  📋 Endpoints:`);
+      console.log(`     GET    /api/settings/state   — Full state`);
+      console.log(`     CRUD   /api/patients`);
+      console.log(`     CRUD   /api/visits`);
+      console.log(`     CRUD   /api/payments`);
+      console.log(`     GET/PUT /api/settings\n`);
+      if (staticDir) {
+        console.log(`  🌐 Frontend served from: ${staticDir}\n`);
+      }
+    });
+  })
+  .catch((err) => {
+    console.error("[server] Failed to initialize database:", err);
+    process.exit(1);
+  });

@@ -5,110 +5,137 @@ import { randomUUID } from "crypto";
 const router = Router();
 
 // ── List all visits ─────────────────────────────────────────────────
-router.get("/", (_req: Request, res: Response) => {
-  const rows = db.prepare("SELECT * FROM visits ORDER BY date DESC").all() as any[];
-  const visits = rows.map((row) => enrichVisit(row));
-  res.json(visits);
+router.get("/", async (_req: Request, res: Response) => {
+  try {
+    const rs = await db.execute("SELECT * FROM visits ORDER BY date DESC");
+    const visits = await Promise.all(rs.rows.map(row => enrichVisit(row)));
+    res.json(visits);
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
 });
 
 // ── Get single visit ────────────────────────────────────────────────
-router.get("/:id", (req: Request, res: Response) => {
-  const row = db.prepare("SELECT * FROM visits WHERE id = ?").get(req.params.id) as any;
-  if (!row) return res.status(404).json({ error: "Visit not found" });
-  res.json(enrichVisit(row));
+router.get("/:id", async (req: Request, res: Response) => {
+  try {
+    const rs = await db.execute({ sql: "SELECT * FROM visits WHERE id = ?", args: [req.params.id] });
+    const row = rs.rows[0];
+    if (!row) return res.status(404).json({ error: "Visit not found" });
+    res.json(await enrichVisit(row));
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
 });
 
 // ── Create visit ────────────────────────────────────────────────────
-router.post("/", (req: Request, res: Response) => {
+router.post("/", async (req: Request, res: Response) => {
   const { patientId, date, procedures, totalCost, notes } = req.body;
   if (!patientId || !date) return res.status(400).json({ error: "patientId and date are required" });
 
   const id = randomUUID().slice(0, 12);
+  const tx = await db.transaction("write");
 
-  const insertVisit = db.prepare(`
-    INSERT INTO visits (id, patient_id, date, total_cost, notes)
-    VALUES (?, ?, ?, ?, ?)
-  `);
-  const insertProc = db.prepare(`
-    INSERT INTO visit_procedures (visit_id, name, cost) VALUES (?, ?, ?)
-  `);
+  try {
+    await tx.execute({
+      sql: "INSERT INTO visits (id, patient_id, date, total_cost, notes) VALUES (?, ?, ?, ?, ?)",
+      args: [id, patientId, date, totalCost || 0, notes || ""]
+    });
 
-  const tx = db.transaction(() => {
-    insertVisit.run(id, patientId, date, totalCost || 0, notes || "");
     if (Array.isArray(procedures)) {
       for (const proc of procedures) {
-        insertProc.run(id, proc.name, proc.cost || 0);
+        await tx.execute({
+          sql: "INSERT INTO visit_procedures (visit_id, name, cost) VALUES (?, ?, ?)",
+          args: [id, proc.name, proc.cost || 0]
+        });
       }
     }
-  });
-  tx();
+    await tx.commit();
 
-  const row = db.prepare("SELECT * FROM visits WHERE id = ?").get(id) as any;
-  res.status(201).json(enrichVisit(row));
+    const rs = await db.execute({ sql: "SELECT * FROM visits WHERE id = ?", args: [id] });
+    res.status(201).json(await enrichVisit(rs.rows[0]));
+  } catch (err) {
+    await tx.rollback();
+    res.status(500).json({ error: String(err) });
+  }
 });
 
 // ── Update visit ────────────────────────────────────────────────────
-router.put("/:id", (req: Request, res: Response) => {
-  const existing = db.prepare("SELECT * FROM visits WHERE id = ?").get(req.params.id) as any;
-  if (!existing) return res.status(404).json({ error: "Visit not found" });
+router.put("/:id", async (req: Request, res: Response) => {
+  try {
+    const rsEx = await db.execute({ sql: "SELECT * FROM visits WHERE id = ?", args: [req.params.id] });
+    const existing = rsEx.rows[0];
+    if (!existing) return res.status(404).json({ error: "Visit not found" });
 
-  const { patientId, date, procedures, totalCost, notes } = req.body;
+    const { patientId, date, procedures, totalCost, notes } = req.body;
+    const tx = await db.transaction("write");
 
-  const updateVisit = db.prepare(`
-    UPDATE visits SET patient_id = ?, date = ?, total_cost = ?, notes = ? WHERE id = ?
-  `);
-  const deleteProcs = db.prepare("DELETE FROM visit_procedures WHERE visit_id = ?");
-  const insertProc = db.prepare(`
-    INSERT INTO visit_procedures (visit_id, name, cost) VALUES (?, ?, ?)
-  `);
+    try {
+      await tx.execute({
+        sql: "UPDATE visits SET patient_id = ?, date = ?, total_cost = ?, notes = ? WHERE id = ?",
+        args: [
+          patientId ?? existing.patient_id,
+          date ?? existing.date,
+          totalCost ?? existing.total_cost,
+          notes ?? existing.notes,
+          req.params.id
+        ]
+      });
 
-  const tx = db.transaction(() => {
-    updateVisit.run(
-      patientId ?? existing.patient_id,
-      date ?? existing.date,
-      totalCost ?? existing.total_cost,
-      notes ?? existing.notes,
-      req.params.id
-    );
-    // Replace procedures
-    if (Array.isArray(procedures)) {
-      deleteProcs.run(req.params.id);
-      for (const proc of procedures) {
-        insertProc.run(req.params.id, proc.name, proc.cost || 0);
+      if (Array.isArray(procedures)) {
+        await tx.execute({ sql: "DELETE FROM visit_procedures WHERE visit_id = ?", args: [req.params.id] });
+        for (const proc of procedures) {
+          await tx.execute({
+            sql: "INSERT INTO visit_procedures (visit_id, name, cost) VALUES (?, ?, ?)",
+            args: [req.params.id, proc.name, proc.cost || 0]
+          });
+        }
       }
-    }
-  });
-  tx();
+      await tx.commit();
 
-  const row = db.prepare("SELECT * FROM visits WHERE id = ?").get(req.params.id) as any;
-  res.json(enrichVisit(row));
+      const rs = await db.execute({ sql: "SELECT * FROM visits WHERE id = ?", args: [req.params.id] });
+      res.json(await enrichVisit(rs.rows[0]));
+    } catch (err) {
+      await tx.rollback();
+      throw err;
+    }
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
 });
 
 // ── Delete visit (+ cascade payments for this visit) ────────────────
-router.delete("/:id", (req: Request, res: Response) => {
-  const existing = db.prepare("SELECT * FROM visits WHERE id = ?").get(req.params.id) as any;
-  if (!existing) return res.status(404).json({ error: "Visit not found" });
+router.delete("/:id", async (req: Request, res: Response) => {
+  try {
+    const rsEx = await db.execute({ sql: "SELECT * FROM visits WHERE id = ?", args: [req.params.id] });
+    if (!rsEx.rows[0]) return res.status(404).json({ error: "Visit not found" });
 
-  const tx = db.transaction(() => {
-    db.prepare("DELETE FROM payments WHERE visit_id = ?").run(req.params.id);
-    db.prepare("DELETE FROM visits WHERE id = ?").run(req.params.id);
-  });
-  tx();
-
-  res.json({ success: true });
+    const tx = await db.transaction("write");
+    try {
+      await tx.execute({ sql: "DELETE FROM payments WHERE visit_id = ?", args: [req.params.id] });
+      await tx.execute({ sql: "DELETE FROM visits WHERE id = ?", args: [req.params.id] });
+      await tx.commit();
+      res.json({ success: true });
+    } catch (err) {
+      await tx.rollback();
+      throw err;
+    }
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
 });
 
 // ── Helper: enrich visit with procedures array ──────────────────────
-function enrichVisit(row: any) {
-  const procs = db
-    .prepare("SELECT name, cost FROM visit_procedures WHERE visit_id = ?")
-    .all(row.id) as { name: string; cost: number }[];
+async function enrichVisit(row: any) {
+  const rs = await db.execute({
+    sql: "SELECT name, cost FROM visit_procedures WHERE visit_id = ?",
+    args: [row.id]
+  });
 
   return {
     id: row.id,
     patientId: row.patient_id,
     date: row.date,
-    procedures: procs,
+    procedures: rs.rows,
     totalCost: row.total_cost,
     notes: row.notes || undefined,
   };
