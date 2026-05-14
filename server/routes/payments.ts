@@ -18,7 +18,10 @@ router.get("/", async (_req: Request, res: Response) => {
 // ── Get single payment ──────────────────────────────────────────────
 router.get("/:id", async (req: Request, res: Response) => {
   try {
-    const rs = await db.execute({ sql: "SELECT * FROM payments WHERE id = ?", args: [req.params.id as string] });
+    const rs = await db.execute({
+      sql: "SELECT * FROM payments WHERE id = ?",
+      args: [req.params.id as string],
+    });
     const row = rs.rows[0];
     if (!row) return res.status(404).json({ error: "Payment not found" });
     res.json(mapRow(row));
@@ -29,18 +32,31 @@ router.get("/:id", async (req: Request, res: Response) => {
 
 // ── Create payment ──────────────────────────────────────────────────
 router.post("/", async (req: Request, res: Response) => {
-  const { patientId, visitId, date, amount, method, notes } = req.body;
-  if (!patientId || !date) return res.status(400).json({ error: "patientId and date are required" });
+  const { patientId, visitId, date, amount, method, notes, procedureNames } = req.body;
+  if (!patientId || !date)
+    return res.status(400).json({ error: "patientId and date are required" });
 
   const id = randomUUID().slice(0, 12);
+  const procNamesStr = Array.isArray(procedureNames)
+    ? procedureNames.join(", ")
+    : procedureNames || "";
 
   try {
     await db.execute({
       sql: `
-        INSERT INTO payments (id, patient_id, visit_id, date, amount, method, notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO payments (id, patient_id, visit_id, date, amount, method, notes, procedure_names)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `,
-      args: [id, patientId, visitId || null, date, amount || 0, method || "Cash", notes || ""]
+      args: [
+        id,
+        patientId,
+        visitId || null,
+        date,
+        amount || 0,
+        method || "Cash",
+        notes || "",
+        procNamesStr,
+      ],
     });
 
     const rs = await db.execute({ sql: "SELECT * FROM payments WHERE id = ?", args: [id] });
@@ -53,15 +69,21 @@ router.post("/", async (req: Request, res: Response) => {
 // ── Update payment ──────────────────────────────────────────────────
 router.put("/:id", async (req: Request, res: Response) => {
   try {
-    const rsEx = await db.execute({ sql: "SELECT * FROM payments WHERE id = ?", args: [req.params.id as string] });
+    const rsEx = await db.execute({
+      sql: "SELECT * FROM payments WHERE id = ?",
+      args: [req.params.id as string],
+    });
     const existing = rsEx.rows[0];
     if (!existing) return res.status(404).json({ error: "Payment not found" });
 
-    const { patientId, visitId, date, amount, method, notes } = req.body;
+    const { patientId, visitId, date, amount, method, notes, procedureNames } = req.body;
+    const procNamesStr = Array.isArray(procedureNames)
+      ? procedureNames.join(", ")
+      : (procedureNames ?? existing.procedure_names);
 
     await db.execute({
       sql: `
-        UPDATE payments SET patient_id = ?, visit_id = ?, date = ?, amount = ?, method = ?, notes = ?
+        UPDATE payments SET patient_id = ?, visit_id = ?, date = ?, amount = ?, method = ?, notes = ?, procedure_names = ?
         WHERE id = ?
       `,
       args: [
@@ -71,11 +93,15 @@ router.put("/:id", async (req: Request, res: Response) => {
         amount ?? existing.amount,
         method ?? existing.method,
         notes ?? existing.notes,
-        req.params.id as string
-      ]
+        procNamesStr,
+        req.params.id as string,
+      ],
     });
 
-    const rs = await db.execute({ sql: "SELECT * FROM payments WHERE id = ?", args: [req.params.id as string] });
+    const rs = await db.execute({
+      sql: "SELECT * FROM payments WHERE id = ?",
+      args: [req.params.id as string],
+    });
     res.json(mapRow(rs.rows[0]));
   } catch (err) {
     res.status(500).json({ error: String(err) });
@@ -85,7 +111,10 @@ router.put("/:id", async (req: Request, res: Response) => {
 // ── Delete payment ──────────────────────────────────────────────────
 router.delete("/:id", async (req: Request, res: Response) => {
   try {
-    const rsEx = await db.execute({ sql: "SELECT * FROM payments WHERE id = ?", args: [req.params.id as string] });
+    const rsEx = await db.execute({
+      sql: "SELECT * FROM payments WHERE id = ?",
+      args: [req.params.id as string],
+    });
     if (!rsEx.rows[0]) return res.status(404).json({ error: "Payment not found" });
 
     await db.execute({ sql: "DELETE FROM payments WHERE id = ?", args: [req.params.id as string] });
@@ -96,15 +125,18 @@ router.delete("/:id", async (req: Request, res: Response) => {
 });
 
 // ── Helper ──────────────────────────────────────────────────────────
-function mapRow(row: any) {
+function mapRow(row: Record<string, unknown>) {
   return {
     id: row.id,
     patientId: row.patient_id,
-    visitId: row.visit_id || undefined,
+    visitId: row.visit_id || null,
     date: row.date,
     amount: row.amount,
     method: row.method || undefined,
     notes: row.notes || undefined,
+    procedureNames: row.procedure_names
+      ? row.procedure_names.split(", ").filter(Boolean)
+      : undefined,
   };
 }
 

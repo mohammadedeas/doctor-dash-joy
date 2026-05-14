@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/select";
 import { useClinic } from "@/lib/clinic-store";
 import type { Patient } from "@/lib/clinic-types";
+import { calcAge } from "@/lib/clinic-utils";
 import { toast } from "sonner";
 import { confirmDialog } from "@/components/confirm-dialog";
 
@@ -33,7 +34,7 @@ const empty = {
   name: "",
   phone: "",
   email: "",
-  dob: "",
+  age: "" as string,
   gender: "" as Patient["gender"],
   address: "",
   medicalNotes: "",
@@ -54,7 +55,7 @@ export function PatientDialog({ open, onOpenChange, patientId, onSaved }: Props)
             name: existing.name,
             phone: existing.phone || "",
             email: existing.email || "",
-            dob: existing.dob || "",
+            age: existing.dob ? String(calcAge(existing.dob) ?? "") : "",
             gender: existing.gender || "",
             address: existing.address || "",
             medicalNotes: existing.medicalNotes || "",
@@ -69,12 +70,17 @@ export function PatientDialog({ open, onOpenChange, patientId, onSaved }: Props)
       toast.error("Name is required");
       return;
     }
+    let dob = "";
+    if (form.age && !isNaN(Number(form.age))) {
+      const y = new Date().getFullYear() - Number(form.age);
+      dob = `${y}-01-01`;
+    }
     const saved = upsertPatient({
       id: existing?.id,
       name: form.name.trim(),
       phone: form.phone.trim(),
       email: form.email.trim(),
-      dob: form.dob,
+      dob,
       gender: form.gender,
       address: form.address.trim(),
       medicalNotes: form.medicalNotes.trim(),
@@ -134,11 +140,12 @@ export function PatientDialog({ open, onOpenChange, patientId, onSaved }: Props)
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>Date of birth</Label>
+              <Label>Age</Label>
               <Input
-                type="date"
-                value={form.dob}
-                onChange={(e) => setForm({ ...form, dob: e.target.value })}
+                type="number"
+                value={form.age}
+                onChange={(e) => setForm({ ...form, age: e.target.value })}
+                placeholder="Years"
               />
             </div>
             <div className="space-y-1.5">

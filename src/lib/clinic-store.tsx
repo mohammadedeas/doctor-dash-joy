@@ -15,6 +15,7 @@ import {
   type Payment,
   type Procedure,
   type Visit,
+  type Appointment,
 } from "./clinic-types";
 import { uid } from "./clinic-utils";
 import * as api from "./api-client";
@@ -31,6 +32,9 @@ type Ctx = {
   // payments
   upsertPayment: (data: Omit<Payment, "id"> & { id?: string }) => Payment;
   deletePayment: (id: string) => void;
+  // appointments
+  upsertAppointment: (data: Omit<Appointment, "id" | "createdAt"> & { id?: string }) => Appointment;
+  deleteAppointment: (id: string) => void;
   // settings
   updateSettings: (patch: Partial<ClinicSettings>) => void;
   setProcedures: (procs: Procedure[]) => void;
@@ -199,6 +203,43 @@ export function ClinicProvider({ children }: { children: ReactNode }) {
     api.deletePaymentApi(id).catch((err) => console.error("Delete payment failed:", err));
   }, []);
 
+  // ── Appointments ────────────────────────────────────────────────
+  const upsertAppointment: Ctx["upsertAppointment"] = useCallback((data) => {
+    let result!: Appointment;
+    if (data.id) {
+      setState((s) => {
+        const i = s.appointments.findIndex((a) => a.id === data.id);
+        if (i === -1) return s;
+        const updated = { ...s.appointments[i], ...data, id: data.id } as Appointment;
+        result = updated;
+        const next = s.appointments.slice();
+        next[i] = updated;
+        return { ...s, appointments: next };
+      });
+      api.updateAppointment(data.id, data).catch((err) => console.error("Update appointment failed:", err));
+    } else {
+      result = { id: uid(), createdAt: new Date().toISOString(), ...data } as Appointment;
+      const tempId = result.id;
+      setState((s) => ({ ...s, appointments: [...s.appointments, result] }));
+      api
+        .createAppointment(data)
+        .then((serverAppt) => {
+          setState((s) => ({
+            ...s,
+            appointments: s.appointments.map((a) => (a.id === tempId ? serverAppt : a)),
+          }));
+          result = serverAppt;
+        })
+        .catch((err) => console.error("Create appointment failed:", err));
+    }
+    return result;
+  }, []);
+
+  const deleteAppointment: Ctx["deleteAppointment"] = useCallback((id) => {
+    setState((s) => ({ ...s, appointments: s.appointments.filter((a) => a.id !== id) }));
+    api.deleteAppointmentApi(id).catch((err) => console.error("Delete appointment failed:", err));
+  }, []);
+
   // ── Settings ────────────────────────────────────────────────────
   const updateSettings: Ctx["updateSettings"] = useCallback((patch) => {
     setState((s) => ({ ...s, settings: { ...s.settings, ...patch } }));
@@ -230,6 +271,8 @@ export function ClinicProvider({ children }: { children: ReactNode }) {
       deleteVisit,
       upsertPayment,
       deletePayment,
+      upsertAppointment,
+      deleteAppointment,
       updateSettings,
       setProcedures,
       replaceAll,
@@ -243,6 +286,8 @@ export function ClinicProvider({ children }: { children: ReactNode }) {
       deleteVisit,
       upsertPayment,
       deletePayment,
+      upsertAppointment,
+      deleteAppointment,
       updateSettings,
       setProcedures,
       replaceAll,

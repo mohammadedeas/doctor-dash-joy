@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -18,7 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useClinic } from "@/lib/clinic-store";
-import type { PaymentMethod } from "@/lib/clinic-types";
+
 import { fmtDate, fmtMoney, patientStats, todayISO, visitPaymentStatus } from "@/lib/clinic-utils";
 import { toast } from "sonner";
 import { confirmDialog } from "@/components/confirm-dialog";
@@ -31,26 +32,24 @@ type Props = {
 };
 
 const NONE_VISIT = "__none__";
-const PAYMENT_METHODS: PaymentMethod[] = ["Cash", "Card", "Bank Transfer", "Insurance", "Other"];
 
 export function PaymentDialog({ open, onOpenChange, paymentId, defaultPatientId }: Props) {
   const { state, upsertPayment, deletePayment } = useClinic();
   const currency = state.settings.currency;
-  const existing = paymentId
-    ? state.payments.find((p) => p.id === paymentId) ?? null
-    : null;
+  const existing = paymentId ? (state.payments.find((p) => p.id === paymentId) ?? null) : null;
 
   const sortedPatients = useMemo(
     () => [...state.patients].sort((a, b) => a.name.localeCompare(b.name)),
-    [state.patients]
+    [state.patients],
   );
 
   const [patientId, setPatientId] = useState("");
   const [visitId, setVisitId] = useState<string>(NONE_VISIT);
   const [amount, setAmount] = useState("");
-  const [method, setMethod] = useState<PaymentMethod>("Cash");
+
   const [date, setDate] = useState(todayISO());
   const [notes, setNotes] = useState("");
+  const [selectedProcs, setSelectedProcs] = useState<string[]>([]);
 
   useEffect(() => {
     if (!open) return;
@@ -58,16 +57,16 @@ export function PaymentDialog({ open, onOpenChange, paymentId, defaultPatientId 
       setPatientId(existing.patientId);
       setVisitId(existing.visitId || NONE_VISIT);
       setAmount(String(existing.amount));
-      setMethod(existing.method);
       setDate(existing.date);
       setNotes(existing.notes || "");
+      setSelectedProcs(existing.procedureNames || []);
     } else {
       setPatientId(defaultPatientId || "");
       setVisitId(NONE_VISIT);
       setAmount("");
-      setMethod("Cash");
       setDate(todayISO());
       setNotes("");
+      setSelectedProcs([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, paymentId, defaultPatientId]);
@@ -77,8 +76,13 @@ export function PaymentDialog({ open, onOpenChange, paymentId, defaultPatientId 
       state.visits
         .filter((v) => v.patientId === patientId)
         .sort((a, b) => (b.date || "").localeCompare(a.date || "")),
-    [state.visits, patientId]
+    [state.visits, patientId],
   );
+
+  const linkedVisit = useMemo(() => {
+    if (!visitId || visitId === NONE_VISIT) return null;
+    return state.visits.find((v) => v.id === visitId) ?? null;
+  }, [state.visits, visitId]);
 
   function save() {
     if (!patientId) return toast.error("Please select a patient");
@@ -92,8 +96,9 @@ export function PaymentDialog({ open, onOpenChange, paymentId, defaultPatientId 
       visitId: visitId === NONE_VISIT ? null : visitId,
       date,
       amount: amt,
-      method,
+      method: "Cash",
       notes: notes.trim(),
+      procedureNames: selectedProcs.length > 0 ? selectedProcs : undefined,
     });
     toast.success(existing ? "Payment updated" : "Payment added");
     onOpenChange(false);
@@ -122,7 +127,13 @@ export function PaymentDialog({ open, onOpenChange, paymentId, defaultPatientId 
         <div className="space-y-4">
           <div className="space-y-1.5">
             <Label>Patient *</Label>
-            <Select value={patientId} onValueChange={(v) => { setPatientId(v); setVisitId(NONE_VISIT); }}>
+            <Select
+              value={patientId}
+              onValueChange={(v) => {
+                setPatientId(v);
+                setVisitId(NONE_VISIT);
+              }}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="— Select patient —" />
               </SelectTrigger>
@@ -142,14 +153,19 @@ export function PaymentDialog({ open, onOpenChange, paymentId, defaultPatientId 
 
           <div className="space-y-1.5">
             <Label>Link to visit (optional)</Label>
-            <Select value={visitId} onValueChange={setVisitId} disabled={!patientId}>
+            <Select
+              value={visitId}
+              onValueChange={(v) => {
+                setVisitId(v);
+                setSelectedProcs([]);
+              }}
+              disabled={!patientId}
+            >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={NONE_VISIT}>
-                  — General payment —
-                </SelectItem>
+                <SelectItem value={NONE_VISIT}>— General payment —</SelectItem>
                 {patientVisits.map((v) => {
                   const status = visitPaymentStatus(state, v);
                   const remaining = (v.totalCost || 0) - status.paid;
@@ -164,7 +180,40 @@ export function PaymentDialog({ open, onOpenChange, paymentId, defaultPatientId 
             </Select>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {linkedVisit && linkedVisit.procedures.length > 0 && (
+            <div className="space-y-2 rounded-lg border p-3">
+              <Label>Treatments covered by this payment</Label>
+              <div className="space-y-2">
+                {linkedVisit.procedures.map((proc, idx) => {
+                  const checked = selectedProcs.includes(proc.name);
+                  return (
+                    <label key={idx} className="flex items-center gap-2 text-sm cursor-pointer">
+                      <Checkbox
+                        checked={checked}
+                        onCheckedChange={(v) => {
+                          const next = v
+                            ? [...selectedProcs, proc.name]
+                            : selectedProcs.filter((n) => n !== proc.name);
+                          setSelectedProcs(next);
+                          // Auto-calculate amount from selected procedures
+                          const selectedCost = linkedVisit.procedures
+                            .filter((p) => next.includes(p.name))
+                            .reduce((s, p) => s + (Number(p.cost) || 0), 0);
+                          if (selectedCost > 0) setAmount(String(selectedCost));
+                        }}
+                      />
+                      <span className="flex-1">{proc.name}</span>
+                      <span className="text-muted-foreground text-xs">
+                        {fmtMoney(proc.cost, currency)}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Amount *</Label>
               <Input
@@ -175,37 +224,14 @@ export function PaymentDialog({ open, onOpenChange, paymentId, defaultPatientId 
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Method</Label>
-              <Select value={method} onValueChange={(v) => setMethod(v as PaymentMethod)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {PAYMENT_METHODS.map((m) => (
-                    <SelectItem key={m} value={m}>
-                      {m}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
               <Label>Date *</Label>
-              <Input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-              />
+              <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
             </div>
           </div>
 
           <div className="space-y-1.5">
             <Label>Notes</Label>
-            <Textarea
-              rows={2}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-            />
+            <Textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
         </div>
 

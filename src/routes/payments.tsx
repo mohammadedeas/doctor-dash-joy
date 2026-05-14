@@ -71,7 +71,7 @@ function PaymentsPage() {
                 <tr>
                   <Th>Date</Th>
                   <Th>Patient</Th>
-                  <Th>Method</Th>
+                  <Th>Treatments</Th>
                   <Th>Notes</Th>
                   <Th className="text-right">Amount</Th>
                   <Th />
@@ -96,13 +96,13 @@ function PaymentsPage() {
                           {pt?.name || "—"}
                         </button>
                       </Td>
-                      <Td>{p.method}</Td>
-                      <Td className="text-muted-foreground max-w-[240px] truncate">
+                      <Td className="text-muted-foreground max-w-[200px] truncate">
+                        {p.procedureNames?.join(", ") || (p.visitId ? "—" : "General")}
+                      </Td>
+                      <Td className="text-muted-foreground max-w-[160px] truncate">
                         {p.notes || ""}
                       </Td>
-                      <Td className="text-right font-semibold">
-                        {fmtMoney(p.amount, currency)}
-                      </Td>
+                      <Td className="text-right font-semibold">{fmtMoney(p.amount, currency)}</Td>
                       <Td className="text-right">
                         <Button
                           variant="outline"

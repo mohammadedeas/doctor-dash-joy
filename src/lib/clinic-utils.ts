@@ -3,7 +3,14 @@ import type { ClinicState, Visit } from "./clinic-types";
 export const uid = () =>
   Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 
-export const todayISO = () => new Date().toISOString().slice(0, 10);
+export function formatLocalDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+export const todayISO = () => formatLocalDate(new Date());
 
 export const initials = (name?: string) =>
   (name || "?")
@@ -29,6 +36,19 @@ export const fmtDate = (d?: string) => {
     month: "short",
     day: "numeric",
   });
+};
+
+export const calcAge = (dob?: string) => {
+  if (!dob) return null;
+  const birth = new Date(dob);
+  if (isNaN(birth.getTime())) return null;
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const m = today.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+    age--;
+  }
+  return age;
 };
 
 export function patientStats(state: ClinicState, patientId: string) {

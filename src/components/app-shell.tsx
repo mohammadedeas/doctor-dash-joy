@@ -4,11 +4,16 @@ import {
   LayoutDashboard,
   Users,
   CalendarDays,
+  Calendar as CalendarIcon,
   CreditCard,
   BarChart3,
   Settings,
   Stethoscope,
+  LogOut,
+  Moon,
+  Sun,
 } from "lucide-react";
+import { useAuth } from "@/lib/auth-context";
 import { useClinic } from "@/lib/clinic-store";
 import { cn } from "@/lib/utils";
 
@@ -23,6 +28,7 @@ const NAV: NavItem[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { to: "/patients", label: "Patients", icon: Users },
   { to: "/visits", label: "Visits", icon: CalendarDays },
+  { to: "/calendar", label: "Calendar", icon: CalendarIcon },
   { to: "/payments", label: "Payments", icon: CreditCard },
   { to: "/reports", label: "Reports", icon: BarChart3 },
   { to: "/settings", label: "Settings", icon: Settings },
@@ -30,8 +36,13 @@ const NAV: NavItem[] = [
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { state } = useClinic();
+  const { logout } = useAuth();
   const { pathname } = useLocation();
   const [version, setVersion] = useState<string>("");
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return document.documentElement.classList.contains("dark");
+  });
 
   useEffect(() => {
     // Get version from Electron IPC if available
@@ -85,8 +96,29 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             );
           })}
         </nav>
-        <div className="px-6 py-4 border-t border-border text-[11px] text-muted-foreground">
-          {version ? `Clinic OS v${version}` : "Clinic OS"}
+        <div className="px-6 py-4 border-t border-border space-y-2">
+          <button
+            onClick={() => {
+              const next = !isDark;
+              setIsDark(next);
+              document.documentElement.classList.toggle("dark", next);
+              localStorage.setItem("clinic_dark_mode", String(next));
+            }}
+            className="flex items-center gap-2 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {isDark ? <Sun className="size-3.5" /> : <Moon className="size-3.5" />}
+            {isDark ? "Light mode" : "Dark mode"}
+          </button>
+          <button
+            onClick={logout}
+            className="flex items-center gap-2 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <LogOut className="size-3.5" />
+            Sign out
+          </button>
+          <div className="text-[11px] text-muted-foreground">
+            {version ? `Clinic OS v${version}` : "Clinic OS"}
+          </div>
         </div>
       </aside>
 
@@ -100,6 +132,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               {state.settings.clinicName}
             </span>
           </div>
+          <button
+            onClick={logout}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <LogOut className="size-3.5" />
+            Sign out
+          </button>
         </div>
         <nav className="flex overflow-x-auto px-2 pb-2 gap-1">
           {NAV.map((item) => {

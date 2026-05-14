@@ -49,7 +49,7 @@ router.put("/", async (req: Request, res: Response) => {
   }
 });
 
-// ── Get full state (patients + visits + payments + settings) ────────
+// ── Get full state (patients + visits + payments + appointments + settings) ────────
 router.get("/state", async (_req: Request, res: Response) => {
   try {
     res.json(await getFullState());
@@ -61,7 +61,7 @@ router.get("/state", async (_req: Request, res: Response) => {
 // ── Replace all state (import) ──────────────────────────────────────
 router.put("/state", async (req: Request, res: Response) => {
   try {
-    const { patients, visits, payments, settings } = req.body;
+    const { patients, visits, payments, appointments, settings } = req.body;
     const tx = await db.transaction("write");
 
     try {
@@ -69,6 +69,7 @@ router.put("/state", async (req: Request, res: Response) => {
       await tx.execute("DELETE FROM visit_procedures");
       await tx.execute("DELETE FROM payments");
       await tx.execute("DELETE FROM visits");
+      await tx.execute("DELETE FROM appointments");
       await tx.execute("DELETE FROM patients");
 
       // Insert patients
@@ -103,14 +104,30 @@ router.put("/state", async (req: Request, res: Response) => {
 
       // Insert payments
       for (const p of payments || []) {
+        const procNamesStr = Array.isArray(p.procedureNames) ? p.procedureNames.join(", ") : "";
         await tx.execute({
           sql: `
-            INSERT INTO payments (id, patient_id, visit_id, date, amount, method, notes)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO payments (id, patient_id, visit_id, date, amount, method, notes, procedure_names)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
           `,
           args: [
             p.id, p.patientId, p.visitId || null, p.date,
-            p.amount || 0, p.method || "Cash", p.notes || ""
+            p.amount || 0, p.method || "Cash", p.notes || "", procNamesStr
+          ]
+        });
+      }
+
+      // Insert appointments
+      for (const a of appointments || []) {
+        await tx.execute({
+          sql: `
+            INSERT INTO appointments (id, patient_id, patient_name, phone, visit_type, dentist_name, date, start_time, end_time, notes, status, payment_status, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `,
+          args: [
+            a.id, a.patientId, a.patientName, a.phone || "", a.visitType || "", a.dentistName || "",
+            a.date, a.startTime, a.endTime, a.notes || "", a.status || "pending", a.paymentStatus || "unpaid",
+            a.createdAt || new Date().toISOString()
           ]
         });
       }
@@ -156,6 +173,7 @@ router.delete("/state", async (_req: Request, res: Response) => {
       await tx.execute("DELETE FROM visit_procedures");
       await tx.execute("DELETE FROM payments");
       await tx.execute("DELETE FROM visits");
+      await tx.execute("DELETE FROM appointments");
       await tx.execute("DELETE FROM patients");
       
       // Reset settings to defaults
@@ -243,12 +261,34 @@ async function getFullState() {
     amount: r.amount,
     method: r.method,
     notes: r.notes || undefined,
+    procedureNames: r.procedure_names
+      ? String(r.procedure_names).split(", ").filter(Boolean)
+      : undefined,
+  }));
+
+  // Appointments
+  const apptRs = await db.execute("SELECT * FROM appointments ORDER BY date ASC, start_time ASC");
+  const appointments = apptRs.rows.map((r) => ({
+    id: r.id,
+    patientId: r.patient_id,
+    patientName: r.patient_name,
+    phone: r.phone || undefined,
+    visitType: r.visit_type,
+    dentistName: r.dentist_name,
+    date: r.date,
+    startTime: r.start_time,
+    endTime: r.end_time,
+    notes: r.notes || undefined,
+    status: r.status,
+    paymentStatus: r.payment_status,
+    createdAt: r.created_at,
   }));
 
   return {
     patients,
     visits,
     payments,
+    appointments,
     settings: await getSettings(),
   };
 }

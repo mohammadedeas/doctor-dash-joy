@@ -1,6 +1,8 @@
-import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
+import { Outlet, Link, createRootRoute, HeadContent, Scripts, useRouter, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 
 import appCss from "../styles.css?url";
+import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { ClinicProvider } from "@/lib/clinic-store";
 import { AppShell } from "@/components/app-shell";
 import { ConfirmDialogHost } from "@/components/confirm-dialog";
@@ -46,6 +48,12 @@ export const Route = createRootRoute({
 });
 
 function RootShell({ children }: { children: React.ReactNode }) {
+  useEffect(() => {
+    const saved = localStorage.getItem("clinic_dark_mode");
+    if (saved === "true") {
+      document.documentElement.classList.add("dark");
+    }
+  }, []);
   return (
     <html lang="en">
       <head>
@@ -61,9 +69,69 @@ function RootShell({ children }: { children: React.ReactNode }) {
 
 function RootComponent() {
   return (
+    <AuthProvider>
+      <AuthGuard>
+        <Outlet />
+      </AuthGuard>
+    </AuthProvider>
+  );
+}
+
+function AuthGuard({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, isLoading } = useAuth();
+  const navigate = useNavigate();
+  const router = useRouter();
+  const pathname = router.state.location.pathname;
+
+  useEffect(() => {
+    if (isLoading) return;
+    if (!isAuthenticated && pathname !== "/login") {
+      navigate({ to: "/login", replace: true });
+    }
+    if (isAuthenticated && pathname === "/login") {
+      navigate({ to: "/", replace: true });
+    }
+  }, [isLoading, isAuthenticated, pathname, navigate]);
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="text-muted-foreground">Loading...</div>
+      </div>
+    );
+  }
+
+  // If unauthenticated and not on login page, show nothing while redirecting
+  if (!isAuthenticated && pathname !== "/login") {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="text-muted-foreground">Redirecting to login...</div>
+      </div>
+    );
+  }
+
+  // If authenticated and on login page, show nothing while redirecting
+  if (isAuthenticated && pathname === "/login") {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="text-muted-foreground">Redirecting...</div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <>
+        {children}
+        <Toaster richColors position="bottom-right" />
+      </>
+    );
+  }
+
+  return (
     <ClinicProvider>
       <AppShell>
-        <Outlet />
+        {children}
       </AppShell>
       <ConfirmDialogHost />
       <Toaster richColors position="bottom-right" />

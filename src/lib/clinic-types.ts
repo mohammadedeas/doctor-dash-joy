@@ -31,6 +31,26 @@ export type Payment = {
   amount: number;
   method: PaymentMethod;
   notes?: string;
+  procedureNames?: string[];
+};
+
+export type AppointmentStatus = "confirmed" | "pending" | "cancelled" | "completed";
+export type AppointmentPaymentStatus = "paid" | "partial" | "unpaid";
+
+export type Appointment = {
+  id: string;
+  patientId: string;
+  patientName: string;
+  phone?: string;
+  visitType: string;
+  dentistName: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  notes?: string;
+  status: AppointmentStatus;
+  paymentStatus: AppointmentPaymentStatus;
+  createdAt: string;
 };
 
 export type ClinicSettings = {
@@ -43,6 +63,7 @@ export type ClinicState = {
   patients: Patient[];
   visits: Visit[];
   payments: Payment[];
+  appointments: Appointment[];
   settings: ClinicSettings;
 };
 
@@ -50,6 +71,7 @@ export const defaultClinicState: ClinicState = {
   patients: [],
   visits: [],
   payments: [],
+  appointments: [],
   settings: {
     clinicName: "My Dental Clinic",
     currency: "ILS",

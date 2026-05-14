@@ -7,7 +7,9 @@ import path from "path";
 const dbUrl = process.env.TURSO_DATABASE_URL || `file:${path.join(process.cwd(), "clinic.db")}`;
 const authToken = process.env.TURSO_AUTH_TOKEN;
 
-console.log(`[db] Connecting to database at: ${dbUrl.startsWith('libsql://') ? 'Turso Cloud' : dbUrl}`);
+console.log(
+  `[db] Connecting to database at: ${dbUrl.startsWith("libsql://") ? "Turso Cloud" : dbUrl}`,
+);
 
 const db = createClient({
   url: dbUrl,
@@ -61,17 +63,55 @@ export async function initDB() {
       key   TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS users (
+      id            TEXT PRIMARY KEY,
+      username      TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      name          TEXT NOT NULL,
+      role          TEXT DEFAULT 'user',
+      created_at    TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS appointments (
+      id             TEXT PRIMARY KEY,
+      patient_id     TEXT NOT NULL,
+      patient_name   TEXT NOT NULL,
+      phone          TEXT DEFAULT '',
+      visit_type     TEXT DEFAULT '',
+      dentist_name   TEXT DEFAULT '',
+      date           TEXT NOT NULL,
+      start_time     TEXT NOT NULL,
+      end_time       TEXT NOT NULL,
+      notes          TEXT DEFAULT '',
+      status         TEXT DEFAULT 'pending',
+      payment_status TEXT DEFAULT 'unpaid',
+      created_at     TEXT NOT NULL
+    );
   `);
+
+  // Migrate: add procedure_names to payments if missing
+  try {
+    await db.execute("ALTER TABLE payments ADD COLUMN procedure_names TEXT DEFAULT ''");
+  } catch {
+    // Column already exists
+  }
 
   // Seed default settings if empty
   const settingsCount = await db.execute("SELECT COUNT(*) as cnt FROM settings");
   const cnt = (settingsCount.rows[0]?.cnt as number) || 0;
-  
+
   if (cnt === 0) {
     const tx = await db.transaction("write");
     try {
-      await tx.execute({ sql: "INSERT INTO settings (key, value) VALUES (?, ?)", args: ["clinicName", "My Dental Clinic"] });
-      await tx.execute({ sql: "INSERT INTO settings (key, value) VALUES (?, ?)", args: ["currency", "ILS"] });
+      await tx.execute({
+        sql: "INSERT INTO settings (key, value) VALUES (?, ?)",
+        args: ["clinicName", "My Dental Clinic"],
+      });
+      await tx.execute({
+        sql: "INSERT INTO settings (key, value) VALUES (?, ?)",
+        args: ["currency", "ILS"],
+      });
       await tx.execute({
         sql: "INSERT INTO settings (key, value) VALUES (?, ?)",
         args: [
@@ -85,8 +125,8 @@ export async function initDB() {
             { name: "Crown", cost: 2000 },
             { name: "X-Ray", cost: 80 },
             { name: "Whitening", cost: 800 },
-          ])
-        ]
+          ]),
+        ],
       });
       await tx.commit();
     } catch (e) {

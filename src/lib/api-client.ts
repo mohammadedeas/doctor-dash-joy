@@ -1,11 +1,18 @@
-import type { ClinicState, ClinicSettings, Patient, Visit, Payment, Procedure } from "./clinic-types";
+import type { ClinicState, ClinicSettings, Patient, Visit, Payment, Procedure, Appointment } from "./clinic-types";
 
 const BASE = "/api";
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
+  const token = typeof window !== "undefined" ? localStorage.getItem("clinic_auth_token") : null;
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...((options?.headers as Record<string, string>) || {}),
+  };
+
   const res = await fetch(`${BASE}${url}`, {
-    headers: { "Content-Type": "application/json" },
     ...options,
+    headers,
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -78,3 +85,23 @@ export const updateSettingsApi = (data: Partial<ClinicSettings>) =>
     method: "PUT",
     body: JSON.stringify(data),
   });
+
+// ── Appointments ────────────────────────────────────────────────────
+export const fetchAppointments = () => request<Appointment[]>("/appointments");
+export const fetchAppointmentsToday = () => request<Appointment[]>("/appointments/today");
+export const fetchAppointmentsUpcoming = () => request<Appointment[]>("/appointments/upcoming");
+
+export const createAppointment = (data: Omit<Appointment, "id" | "createdAt">) =>
+  request<Appointment>("/appointments", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+
+export const updateAppointment = (id: string, data: Partial<Appointment>) =>
+  request<Appointment>(`/appointments/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+
+export const deleteAppointmentApi = (id: string) =>
+  request<{ success: boolean }>(`/appointments/${id}`, { method: "DELETE" });

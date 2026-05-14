@@ -4,19 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Avatar } from "@/components/patient-avatar";
 import { StatusBadge } from "@/components/status-badge";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useClinic } from "@/lib/clinic-store";
-import {
-  fmtDate,
-  fmtMoney,
-  patientStats,
-  visitPaymentStatus,
-} from "@/lib/clinic-utils";
+import { fmtDate, fmtMoney, patientStats, visitPaymentStatus, calcAge } from "@/lib/clinic-utils";
 import { PatientDialog } from "@/components/patient-dialog";
 import { VisitDialog } from "@/components/visit-dialog";
 import { PaymentDialog } from "@/components/payment-dialog";
@@ -102,7 +92,7 @@ function PatientDetail() {
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-5 border-b text-sm">
-          <Info label="Date of birth" value={p.dob ? fmtDate(p.dob) : "—"} />
+          <Info label="Age" value={calcAge(p.dob) ?? "—"} />
           <Info label="Gender" value={p.gender || "—"} />
           <Info label="Address" value={p.address || "—"} />
           <Info label="Patient since" value={fmtDate(p.createdAt)} />
@@ -110,7 +100,10 @@ function PatientDetail() {
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-5 border-b text-sm bg-muted/40">
           <Info label="Visits" value={<strong>{st.visitCount}</strong>} />
-          <Info label="Total billed" value={<strong>{fmtMoney(st.totalBilled, currency)}</strong>} />
+          <Info
+            label="Total billed"
+            value={<strong>{fmtMoney(st.totalBilled, currency)}</strong>}
+          />
           <Info
             label="Total paid"
             value={<strong className="text-primary">{fmtMoney(st.totalPaid, currency)}</strong>}
@@ -203,6 +196,7 @@ function PatientDetail() {
                       <Th>Date</Th>
                       <Th>Method</Th>
                       <Th>For visit</Th>
+                      <Th>Treatments</Th>
                       <Th className="text-right">Amount</Th>
                       <Th />
                     </tr>
@@ -215,7 +209,14 @@ function PatientDetail() {
                           <Td className="font-medium">{fmtDate(py.date)}</Td>
                           <Td>{py.method}</Td>
                           <Td>
-                            {v ? fmtDate(v.date) : <span className="text-muted-foreground">General</span>}
+                            {v ? (
+                              fmtDate(v.date)
+                            ) : (
+                              <span className="text-muted-foreground">General</span>
+                            )}
+                          </Td>
+                          <Td className="text-muted-foreground max-w-[160px] truncate">
+                            {py.procedureNames?.join(", ") || (v ? "—" : "General")}
                           </Td>
                           <Td className="text-right font-semibold">
                             {fmtMoney(py.amount, currency)}
@@ -243,11 +244,7 @@ function PatientDetail() {
         </Tabs>
       </Card>
 
-      <PatientDialog
-        open={editPatient}
-        onOpenChange={setEditPatient}
-        patientId={p.id}
-      />
+      <PatientDialog open={editPatient} onOpenChange={setEditPatient} patientId={p.id} />
       <VisitDialog
         open={visitOpen}
         onOpenChange={setVisitOpen}
