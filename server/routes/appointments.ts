@@ -124,7 +124,7 @@ router.put("/:id", async (req: Request, res: Response) => {
     const existing = await db.execute({ sql: "SELECT 1 FROM appointments WHERE id = ?", args: [String(req.params.id)] });
     if (!existing.rows.length) return res.status(404).json({ error: "Appointment not found" });
 
-    const conflict = await findConflict(date, startTime, endTime, dentistName, req.params.id);
+    const conflict = await findConflict(date, startTime, endTime, dentistName, String(req.params.id));
     if (conflict) {
       return res.status(409).json({ error: "Time slot conflict", conflict });
     }
@@ -137,11 +137,11 @@ router.put("/:id", async (req: Request, res: Response) => {
       args: [
         patientId, patientName, phone || "", visitType || "", dentistName || "",
         date, startTime, endTime, notes || "", status || "pending", paymentStatus || "unpaid",
-        req.params.id,
+        String(req.params.id),
       ],
     });
 
-    const rs = await db.execute({ sql: "SELECT * FROM appointments WHERE id = ?", args: [req.params.id] });
+    const rs = await db.execute({ sql: "SELECT * FROM appointments WHERE id = ?", args: [String(req.params.id)] });
     res.json(mapRow(rs.rows[0]));
   } catch (err) {
     res.status(500).json({ error: String(err) });
