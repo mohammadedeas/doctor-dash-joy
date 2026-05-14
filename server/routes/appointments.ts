@@ -81,7 +81,7 @@ router.get("/:id", async (req: Request, res: Response) => {
   try {
     const rs = await db.execute({
       sql: "SELECT * FROM appointments WHERE id = ?",
-      args: [req.params.id],
+      args: [String(req.params.id)],
     });
     if (!rs.rows.length) return res.status(404).json({ error: "Appointment not found" });
     res.json(mapRow(rs.rows[0]));
@@ -121,7 +121,7 @@ router.post("/", async (req: Request, res: Response) => {
 router.put("/:id", async (req: Request, res: Response) => {
   try {
     const { patientId, patientName, phone, visitType, dentistName, date, startTime, endTime, notes, status, paymentStatus } = req.body;
-    const existing = await db.execute({ sql: "SELECT 1 FROM appointments WHERE id = ?", args: [req.params.id] });
+    const existing = await db.execute({ sql: "SELECT 1 FROM appointments WHERE id = ?", args: [String(req.params.id)] });
     if (!existing.rows.length) return res.status(404).json({ error: "Appointment not found" });
 
     const conflict = await findConflict(date, startTime, endTime, dentistName, req.params.id);
@@ -151,7 +151,7 @@ router.put("/:id", async (req: Request, res: Response) => {
 // ── Delete appointment ──────────────────────────────────────────────
 router.delete("/:id", async (req: Request, res: Response) => {
   try {
-    await db.execute({ sql: "DELETE FROM appointments WHERE id = ?", args: [req.params.id] });
+    await db.execute({ sql: "DELETE FROM appointments WHERE id = ?", args: [String(req.params.id)] });
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: String(err) });

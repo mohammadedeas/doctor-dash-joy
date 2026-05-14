@@ -135,7 +135,7 @@ function mapRow(row: Record<string, unknown>) {
     method: row.method || undefined,
     notes: row.notes || undefined,
     procedureNames: row.procedure_names
-      ? row.procedure_names.split(", ").filter(Boolean)
+      ? String(row.procedure_names).split(", ").filter(Boolean)
       : undefined,
   };
 }
