@@ -10,7 +10,8 @@ import { fmtDate, fmtMoney, patientStats, visitPaymentStatus, calcAge } from "@/
 import { PatientDialog } from "@/components/patient-dialog";
 import { VisitDialog } from "@/components/visit-dialog";
 import { PaymentDialog } from "@/components/payment-dialog";
-import { ArrowLeft, Pencil, Plus, CreditCard } from "lucide-react";
+import { ArrowLeft, Pencil, Plus, CreditCard, Calendar, CreditCardIcon } from "lucide-react";
+import { DentalChart } from "@/components/dental";
 
 export const Route = createFileRoute("/patients/$patientId")({
   component: PatientDetail,
@@ -50,6 +51,7 @@ function PatientDetail() {
 
   return (
     <>
+      {/* Top Actions */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <Button variant="outline" onClick={() => navigate({ to: "/patients" })}>
           <ArrowLeft className="size-4" /> Back to patients
@@ -78,7 +80,8 @@ function PatientDetail() {
         </div>
       </div>
 
-      <Card className="overflow-hidden p-0">
+      {/* Patient Info Card */}
+      <Card className="overflow-hidden p-0 mb-6">
         <div className="flex items-center gap-4 p-5 border-b">
           <Avatar name={p.name} size={56} />
           <div className="min-w-0">
@@ -119,19 +122,40 @@ function PatientDetail() {
         </div>
 
         {p.medicalNotes && (
-          <div className="p-5 border-b">
+          <div className="p-5">
             <div className="text-[11px] uppercase tracking-wider font-medium text-muted-foreground mb-1">
               Medical notes
             </div>
             <p className="text-sm whitespace-pre-wrap">{p.medicalNotes}</p>
           </div>
         )}
+      </Card>
 
+      {/* Dental Chart — Full Width */}
+      <div className="mb-6">
+        <DentalChart
+          patientId={patientId}
+          className="min-h-[500px]"
+          onDataChange={(data) => {
+            // In a real app, persist to backend via API
+            console.log("Dental chart data updated:", data);
+          }}
+        />
+      </div>
+
+      {/* Visits & Payments Tabs */}
+      <Card className="overflow-hidden p-0">
         <Tabs defaultValue="visits" className="p-0">
           <div className="px-5 pt-3 border-b">
             <TabsList>
-              <TabsTrigger value="visits">Visits ({visits.length})</TabsTrigger>
-              <TabsTrigger value="payments">Payments ({payments.length})</TabsTrigger>
+              <TabsTrigger value="visits">
+                <Calendar className="h-3.5 w-3.5 mr-1.5" />
+                Visits ({visits.length})
+              </TabsTrigger>
+              <TabsTrigger value="payments">
+                <CreditCardIcon className="h-3.5 w-3.5 mr-1.5" />
+                Payments ({payments.length})
+              </TabsTrigger>
             </TabsList>
           </div>
 

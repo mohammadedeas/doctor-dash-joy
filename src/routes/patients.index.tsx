@@ -31,7 +31,7 @@ function PatientsPage() {
           p.name.toLowerCase().includes(query) ||
           (p.phone || "").includes(query)
       )
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
   }, [state.patients, q]);
 
   return (

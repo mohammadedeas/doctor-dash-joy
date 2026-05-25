@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { createFileRoute } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth-context";
@@ -21,10 +21,11 @@ function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Redirect if already logged in
-  if (isAuthenticated) {
-    navigate({ to: "/", replace: true });
-    return null;
-  }
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate({ to: "/", replace: true });
+    }
+  }, [isAuthenticated, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

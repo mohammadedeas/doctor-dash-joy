@@ -6,6 +6,7 @@ import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import listPlugin from "@fullcalendar/list";
 import type { EventClickArg, EventDropArg, DateSelectArg } from "@fullcalendar/core";
+import type { DateClickArg } from "@fullcalendar/interaction";
 import { useClinic } from "@/lib/clinic-store";
 import type { Appointment } from "@/lib/clinic-types";
 import { formatLocalDate } from "@/lib/clinic-utils";
@@ -59,6 +60,11 @@ function CalendarPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [dentistFilter, setDentistFilter] = useState<string>("all");
+  const [isTouch, setIsTouch] = useState(false);
+
+  useEffect(() => {
+    setIsTouch(window.matchMedia("(pointer: coarse)").matches);
+  }, []);
 
   const dentists = useMemo(() => {
     const set = new Set(state.appointments.map((a) => a.dentistName).filter(Boolean));
@@ -136,6 +142,21 @@ function CalendarPage() {
     const dateStr = formatLocalDate(start);
     const startTime = start.toTimeString().slice(0, 5);
     const endTime = end.toTimeString().slice(0, 5);
+    setEditId(null);
+    setDefaultDate(dateStr);
+    setDefaultStartTime(startTime);
+    setDefaultEndTime(endTime);
+    setDialogOpen(true);
+  }
+
+  function handleDateClick(arg: DateClickArg) {
+    const date = arg.date;
+    const dateStr = formatLocalDate(date);
+    const hour = date.getHours();
+    const startHour = hour === 0 ? 9 : hour;
+    const startTime = `${String(startHour).padStart(2, "0")}:00`;
+    const endHour = startHour + 1;
+    const endTime = `${String(endHour).padStart(2, "0")}:00`;
     setEditId(null);
     setDefaultDate(dateStr);
     setDefaultStartTime(startTime);
@@ -249,13 +270,13 @@ function CalendarPage() {
   }
 
   return (
-    <div className="flex flex-col lg:flex-row gap-4 h-[calc(100vh-120px)]">
+    <div className="flex flex-col lg:flex-row gap-4 h-[calc(100dvh-120px)] min-h-[400px]">
       {/* Main Calendar */}
       <div className="flex-1 min-w-0 flex flex-col">
         {/* Toolbar */}
         <div className="sticky top-0 z-20 bg-background pb-3 space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 shrink-0">
               <Button variant="outline" size="icon" onClick={goPrev}>
                 <ChevronLeft className="size-4" />
               </Button>
@@ -267,7 +288,7 @@ function CalendarPage() {
               </Button>
             </div>
 
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 shrink-0">
               {[
                 { key: "dayGridMonth", label: "Month" },
                 { key: "timeGridWeek", label: "Week" },
@@ -296,17 +317,17 @@ function CalendarPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <div className="relative">
+            <div className="relative flex-1 min-w-[8rem] max-w-[13rem]">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
               <Input
                 placeholder="Search appointments..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-8 w-52"
+                className="pl-8 w-full"
               />
             </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-36">
+              <SelectTrigger className="w-full sm:w-36 shrink-0">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
@@ -318,7 +339,7 @@ function CalendarPage() {
               </SelectContent>
             </Select>
             <Select value={dentistFilter} onValueChange={setDentistFilter}>
-              <SelectTrigger className="w-40">
+              <SelectTrigger className="w-full sm:w-40 shrink-0">
                 <SelectValue placeholder="Dentist" />
               </SelectTrigger>
               <SelectContent>
@@ -333,9 +354,9 @@ function CalendarPage() {
 
             <div className="flex items-center gap-2 ml-auto">
               {Object.entries(STATUS_COLORS).map(([status, color]) => (
-                <div key={status} className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                <div key={status} className="flex items-center gap-1 text-[11px] text-muted-foreground" title={status}>
                   <span className="size-2.5 rounded-full" style={{ backgroundColor: color.bg }} />
-                  <span className="capitalize">{status}</span>
+                  <span className="capitalize hidden sm:inline">{status}</span>
                 </div>
               ))}
             </div>
@@ -350,13 +371,15 @@ function CalendarPage() {
             initialView={view}
             headerToolbar={false}
             events={events}
-            editable={true}
+            editable={!isTouch}
             selectable={true}
             selectMirror={true}
             eventClick={handleEventClick}
             select={handleSelectSlot}
-            eventDrop={handleEventDrop}
-            eventResize={handleEventResize}
+            dateClick={handleDateClick}
+            eventDrop={isTouch ? undefined : handleEventDrop}
+            eventResize={isTouch ? undefined : handleEventResize}
+            stickyHeaderDates={true}
             height="100%"
             allDaySlot={false}
             slotMinTime="07:00:00"
@@ -378,7 +401,7 @@ function CalendarPage() {
       </div>
 
       {/* Side Panel */}
-      <div className="w-full lg:w-72 shrink-0 space-y-3">
+      <div className="w-full lg:w-60 xl:w-72 shrink-0 space-y-3">
         <Card className="p-4">
           <div className="flex items-center gap-2 mb-3">
             <CalendarIcon className="size-4 text-primary" />
