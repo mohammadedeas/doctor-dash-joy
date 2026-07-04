@@ -16,6 +16,12 @@ const __filename_esm = typeof __filename !== "undefined" ? __filename : fileURLT
 const __dirname = path.dirname(__filename_esm);
 const app = express();
 
+// Vercel (and most PaaS hosts) sit exactly one reverse proxy in front of the
+// app and set X-Forwarded-For correctly, so trust that one hop — needed for
+// express-rate-limit and req.ip to see the real client address instead of
+// throwing/misidentifying everyone as the proxy.
+app.set("trust proxy", 1);
+
 // Middleware
 const isProduction = process.env.NODE_ENV === "production";
 if (isProduction && !process.env.CLIENT_URL) {
