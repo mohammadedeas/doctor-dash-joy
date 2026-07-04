@@ -9,6 +9,7 @@ import {
 } from "react";
 import {
   defaultClinicState,
+  normalizeClinicState,
   type ClinicSettings,
   type ClinicState,
   type Patient,
@@ -16,6 +17,7 @@ import {
   type Procedure,
   type Visit,
   type Appointment,
+  type ToothTreatment,
 } from "./clinic-types";
 import { uid } from "./clinic-utils";
 import * as api from "./api-client";
@@ -35,6 +37,11 @@ type Ctx = {
   // appointments
   upsertAppointment: (data: Omit<Appointment, "id" | "createdAt"> & { id?: string }) => Appointment;
   deleteAppointment: (id: string) => void;
+  // tooth treatments
+  upsertToothTreatment: (data: Omit<ToothTreatment, "id" | "createdAt"> & { id?: string }) => ToothTreatment;
+  deleteToothTreatment: (id: string) => void;
+  // refresh
+  refreshState: () => Promise<void>;
   // settings
   updateSettings: (patch: Partial<ClinicSettings>) => void;
   setProcedures: (procs: Procedure[]) => void;
@@ -50,7 +57,7 @@ export function ClinicProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<ClinicState>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) return JSON.parse(saved);
+      if (saved) return normalizeClinicState(JSON.parse(saved));
     } catch {}
     return structuredClone(defaultClinicState);
   });
@@ -203,6 +210,43 @@ export function ClinicProvider({ children }: { children: ReactNode }) {
     api.deletePaymentApi(id).catch((err) => console.error("Delete payment failed:", err));
   }, []);
 
+  // ── Tooth Treatments ────────────────────────────────────────────
+  const upsertToothTreatment: Ctx["upsertToothTreatment"] = useCallback((data) => {
+    let result!: ToothTreatment;
+    if (data.id) {
+      setState((s) => {
+        const i = s.toothTreatments.findIndex((t) => t.id === data.id);
+        if (i === -1) return s;
+        const updated = { ...s.toothTreatments[i], ...data, id: data.id } as ToothTreatment;
+        result = updated;
+        const next = s.toothTreatments.slice();
+        next[i] = updated;
+        return { ...s, toothTreatments: next };
+      });
+      api.updateToothTreatment(data.id, data).catch((err) => console.error("Update tooth treatment failed:", err));
+    } else {
+      result = { id: uid(), createdAt: new Date().toISOString(), ...data } as ToothTreatment;
+      const tempId = result.id;
+      setState((s) => ({ ...s, toothTreatments: [...s.toothTreatments, result] }));
+      api
+        .createToothTreatment(data)
+        .then((serverTt) => {
+          setState((s) => ({
+            ...s,
+            toothTreatments: s.toothTreatments.map((t) => (t.id === tempId ? serverTt : t)),
+          }));
+          result = serverTt;
+        })
+        .catch((err) => console.error("Create tooth treatment failed:", err));
+    }
+    return result;
+  }, []);
+
+  const deleteToothTreatment: Ctx["deleteToothTreatment"] = useCallback((id) => {
+    setState((s) => ({ ...s, toothTreatments: s.toothTreatments.filter((t) => t.id !== id) }));
+    api.deleteToothTreatment(id).catch((err) => console.error("Delete tooth treatment failed:", err));
+  }, []);
+
   // ── Appointments ────────────────────────────────────────────────
   const upsertAppointment: Ctx["upsertAppointment"] = useCallback((data) => {
     let result!: Appointment;
@@ -259,6 +303,18 @@ export function ClinicProvider({ children }: { children: ReactNode }) {
     api.replaceState(next).catch((err) => console.error("Replace state failed:", err));
   }, []);
 
+  const refreshState: Ctx["refreshState"] = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await api.fetchState();
+      setState(data);
+    } catch (err) {
+      console.error("Refresh state failed:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
 
 
   const value = useMemo<Ctx>(
@@ -273,9 +329,12 @@ export function ClinicProvider({ children }: { children: ReactNode }) {
       deletePayment,
       upsertAppointment,
       deleteAppointment,
+      upsertToothTreatment,
+      deleteToothTreatment,
       updateSettings,
       setProcedures,
       replaceAll,
+      refreshState,
     }),
     [
       state,
@@ -288,9 +347,12 @@ export function ClinicProvider({ children }: { children: ReactNode }) {
       deletePayment,
       upsertAppointment,
       deleteAppointment,
+      upsertToothTreatment,
+      deleteToothTreatment,
       updateSettings,
       setProcedures,
       replaceAll,
+      refreshState,
     ]
   );
 

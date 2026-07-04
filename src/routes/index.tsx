@@ -1,16 +1,18 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
-import { PageHeader } from "@/components/app-shell";
+import { useEffect, useState } from "react";
+import { motion, type Variants } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { StatusBadge } from "@/components/status-badge";
+import { StatusBadge, toneTextClass } from "@/components/status-badge";
+import { StatCard } from "@/components/stat-card";
+import { EmptyState } from "@/components/empty-state";
+import { Th, Td } from "@/components/data-table";
 import { useClinic } from "@/lib/clinic-store";
 import { useAuth } from "@/lib/auth-context";
-import { useCountUp } from "@/hooks/use-count-up";
-import { fmtDate, fmtMoney, todayISO, visitPaymentStatus } from "@/lib/clinic-utils";
+import { fmtDate, fmtMoney, todayISO, visitPaymentStatus, clinicFinancialSummary, appointmentStatusTone } from "@/lib/clinic-utils";
 import { PatientDialog } from "@/components/patient-dialog";
 import { VisitDialog } from "@/components/visit-dialog";
+import { TREATMENT_STATUS_CONFIG } from "@/components/dental/treatment-constants";
 import {
   Plus,
   UserPlus,
@@ -22,15 +24,16 @@ import {
   AlertCircle,
   Clock,
   ChevronRight,
-  ArrowUpRight,
   Sparkles,
+  Activity,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({
   component: Dashboard,
 });
 
-const containerVariants = {
+const containerVariants: Variants = {
   hidden: { opacity: 0 },
   show: {
     opacity: 1,
@@ -38,7 +41,7 @@ const containerVariants = {
   },
 };
 
-const itemVariants = {
+const itemVariants: Variants = {
   hidden: { opacity: 0, y: 16 },
   show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 24 } },
 };
@@ -51,11 +54,15 @@ function Dashboard() {
   const [patientOpen, setPatientOpen] = useState(false);
   const [visitOpen, setVisitOpen] = useState(false);
 
+  useEffect(() => {
+    const openVisit = () => setVisitOpen(true);
+    window.addEventListener("new-visit", openVisit);
+    return () => window.removeEventListener("new-visit", openVisit);
+  }, []);
+
   const totalPatients = state.patients.length;
   const totalVisits = state.visits.length;
-  const totalRevenue = state.payments.reduce((s, p) => s + p.amount, 0);
-  const totalBilled = state.visits.reduce((s, v) => s + (v.totalCost || 0), 0);
-  const outstanding = totalBilled - totalRevenue;
+  const { totalBilled, totalPaid: totalRevenue, outstanding } = clinicFinancialSummary(state);
 
   const today = todayISO();
   const monthStart = today.slice(0, 7);
@@ -81,6 +88,35 @@ function Dashboard() {
   const nextAppointments = [...state.appointments]
     .filter((a) => a.date >= today && a.status !== "cancelled")
     .sort((a, b) => (a.date + a.startTime).localeCompare(b.date + b.startTime))
+    .slice(0, 5);
+
+  // Treatment stats
+  const treatmentStats = {
+    Planned: state.toothTreatments.filter((t) => t.status === "Planned").length,
+    "In Progress": state.toothTreatments.filter((t) => t.status === "In Progress").length,
+    Completed: state.toothTreatments.filter((t) => t.status === "Completed").length,
+    Cancelled: state.toothTreatments.filter((t) => t.status === "Cancelled").length,
+    Referred: state.toothTreatments.filter((t) => t.status === "Referred").length,
+    Failed: state.toothTreatments.filter((t) => t.status === "Failed").length,
+  };
+  const treatmentRevenue = state.toothTreatments.reduce((s, t) => s + (t.cost || 0), 0);
+
+  // Most treated teeth
+  const teethCounts: Record<number, number> = {};
+  for (const t of state.toothTreatments) {
+    teethCounts[t.toothNumber] = (teethCounts[t.toothNumber] || 0) + 1;
+  }
+  const mostTreatedTeeth = Object.entries(teethCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5);
+
+  // Revenue by procedure
+  const procRevenue: Record<string, number> = {};
+  for (const t of state.toothTreatments) {
+    procRevenue[t.procedure] = (procRevenue[t.procedure] || 0) + (t.cost || 0);
+  }
+  const topProcedures = Object.entries(procRevenue)
+    .sort((a, b) => b[1] - a[1])
     .slice(0, 5);
 
   const greeting = () => {
@@ -134,6 +170,7 @@ function Dashboard() {
           hint={`${todayVisits} visit${todayVisits !== 1 ? "s" : ""} today`}
           icon={<Users className="size-5" />}
           variant="blue"
+          motionVariants={itemVariants}
         />
         <StatCard
           label="Total Visits"
@@ -141,6 +178,7 @@ function Dashboard() {
           hint="All-time recorded"
           icon={<Stethoscope className="size-5" />}
           variant="sky"
+          motionVariants={itemVariants}
         />
         <StatCard
           label="Monthly Revenue"
@@ -149,6 +187,7 @@ function Dashboard() {
           hint={`Total: ${fmtMoney(totalRevenue, currency)}`}
           icon={<TrendingUp className="size-5" />}
           variant="emerald"
+          motionVariants={itemVariants}
         />
         <StatCard
           label="Outstanding"
@@ -157,6 +196,7 @@ function Dashboard() {
           hint={`Billed: ${fmtMoney(totalBilled, currency)}`}
           icon={<Wallet className="size-5" />}
           variant={outstanding > 0 ? "amber" : "emerald"}
+          motionVariants={itemVariants}
         />
       </div>
 
@@ -240,7 +280,7 @@ function Dashboard() {
                       </div>
                     </div>
                   </div>
-                  <StatusBadge variant={a.status as any}>{a.status}</StatusBadge>
+                  <StatusBadge tone={appointmentStatusTone(a.status)} className="capitalize">{a.status}</StatusBadge>
                 </div>
               ))}
             </div>
@@ -257,6 +297,28 @@ function Dashboard() {
         </Card>
       </motion.div>
 
+      {/* Treatment Stats */}
+      <motion.div variants={itemVariants} className="mb-8">
+        <h3 className="font-semibold text-[15px] mb-4 flex items-center gap-2">
+          <Activity className="size-4 text-primary" />
+          Treatment Overview
+        </h3>
+        <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 mb-4">
+          {Object.entries(treatmentStats).map(([status, count]) => {
+            const cfg = TREATMENT_STATUS_CONFIG[status as keyof typeof TREATMENT_STATUS_CONFIG];
+            return (
+              <div
+                key={status}
+                className="rounded-xl border border-border bg-card p-3 text-center"
+              >
+                <div className={cn("text-xl font-bold tabular-nums", toneTextClass(cfg.tone))}>{count}</div>
+                <div className="text-[11px] font-medium mt-1 text-muted-foreground">{cfg.label}</div>
+              </div>
+            );
+          })}
+        </div>
+      </motion.div>
+
       {/* Recent Activity Row */}
       <motion.div variants={itemVariants} className="grid gap-6 grid-cols-1 xl:grid-cols-2 mb-6">
         {/* Recent Visits */}
@@ -268,7 +330,11 @@ function Dashboard() {
             </Button>
           </div>
           {recentVisits.length === 0 ? (
-            <EmptyState title="No visits yet" desc="Record your first visit to get started." />
+            <EmptyState
+              title="No visits yet"
+              desc="Record your first visit to get started."
+              icon={<AlertCircle className="size-5" />}
+            />
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -303,7 +369,7 @@ function Dashboard() {
                         </Td>
                         <Td className="text-right font-semibold">{fmtMoney(v.totalCost, currency)}</Td>
                         <Td>
-                          <StatusBadge variant={status.variant}>{status.label}</StatusBadge>
+                          <StatusBadge tone={status.tone}>{status.label}</StatusBadge>
                         </Td>
                       </tr>
                     );
@@ -312,6 +378,63 @@ function Dashboard() {
               </table>
             </div>
           )}
+        </Card>
+
+        {/* Top Procedures & Teeth */}
+        <Card className="p-0 border border-border bg-card shadow-card overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+            <h3 className="font-semibold text-[15px]">Treatment Insights</h3>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-border">
+            <div className="p-4">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+                Revenue by Procedure
+              </h4>
+              {topProcedures.length === 0 ? (
+                <EmptyState
+                  title="No data"
+                  desc="Treatments will appear here."
+                  icon={<AlertCircle className="size-5" />}
+                />
+              ) : (
+                <div className="space-y-2">
+                  {topProcedures.map(([proc, rev]) => (
+                    <div key={proc} className="flex items-center justify-between text-sm">
+                      <span className="truncate pr-2">{proc}</span>
+                      <span className="font-semibold text-primary shrink-0">{fmtMoney(rev, currency)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="p-4">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+                Most Treated Teeth
+              </h4>
+              {mostTreatedTeeth.length === 0 ? (
+                <EmptyState
+                  title="No data"
+                  desc="Treatments will appear here."
+                  icon={<AlertCircle className="size-5" />}
+                />
+              ) : (
+                <div className="space-y-2">
+                  {mostTreatedTeeth.map(([tooth, count]) => (
+                    <div key={tooth} className="flex items-center justify-between text-sm">
+                      <span>Tooth {tooth}</span>
+                      <span className="font-semibold text-primary">{count} treatment{count !== 1 ? "s" : ""}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="px-5 py-3 border-t border-border bg-muted/30">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Total treatment revenue</span>
+              <span className="font-bold text-primary">{fmtMoney(treatmentRevenue, currency)}</span>
+            </div>
+          </div>
         </Card>
 
         {/* Recent Payments */}
@@ -323,7 +446,11 @@ function Dashboard() {
             </Button>
           </div>
           {recentPayments.length === 0 ? (
-            <EmptyState title="No payments yet" desc="Payments will appear here once recorded." />
+            <EmptyState
+              title="No payments yet"
+              desc="Payments will appear here once recorded."
+              icon={<AlertCircle className="size-5" />}
+            />
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -369,59 +496,6 @@ function Dashboard() {
 
 /* ── Sub-components ────────────────────────────────────────────────── */
 
-function StatCard({
-  label,
-  value,
-  prefix,
-  hint,
-  icon,
-  variant = "blue",
-}: {
-  label: string;
-  value: number;
-  prefix?: string;
-  hint?: string;
-  icon: React.ReactNode;
-  variant?: "blue" | "sky" | "emerald" | "amber" | "rose";
-}) {
-  const variants = {
-    blue: "bg-blue-50 text-blue-600 dark:bg-blue-950/30 dark:text-blue-400",
-    sky: "bg-sky-50 text-sky-600 dark:bg-sky-950/30 dark:text-sky-400",
-    emerald: "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400",
-    amber: "bg-amber-50 text-amber-600 dark:bg-amber-950/30 dark:text-amber-400",
-    rose: "bg-rose-50 text-rose-600 dark:bg-rose-950/30 dark:text-rose-400",
-  };
-
-  const animatedValue = useCountUp(value, 1400);
-  const displayValue = prefix
-    ? `${prefix}${Number(animatedValue.replace(/,/g, "")).toLocaleString(undefined, {
-        minimumFractionDigits: value % 1 !== 0 ? 2 : 0,
-        maximumFractionDigits: 2,
-      })}`
-    : animatedValue;
-
-  return (
-    <motion.div
-      variants={itemVariants}
-      className="relative overflow-hidden rounded-xl border border-border bg-card p-4 lg:p-5 shadow-card hover:shadow-card-hover transition-all duration-200 group"
-    >
-      <div className="flex items-start justify-between mb-3">
-        <div className={`size-9 rounded-lg flex items-center justify-center ${variants[variant]}`}>
-          {icon}
-        </div>
-        <ArrowUpRight className="size-4 text-muted-foreground/40 group-hover:text-primary transition-colors" />
-      </div>
-      <div className="text-2xl font-bold font-display tracking-tight text-foreground tabular-nums">
-        {displayValue}
-      </div>
-      <div className="text-[11px] font-semibold text-muted-foreground mt-1 uppercase tracking-wider">
-        {label}
-      </div>
-      {hint && <div className="text-xs text-muted-foreground/70 mt-2">{hint}</div>}
-    </motion.div>
-  );
-}
-
 function QuickAction({
   icon,
   label,
@@ -448,24 +522,4 @@ function QuickAction({
       <ChevronRight className="size-4 text-muted-foreground/40 group-hover:text-foreground transition-colors shrink-0" />
     </button>
   );
-}
-
-function EmptyState({ title, desc }: { title: string; desc: string }) {
-  return (
-    <div className="text-center py-12 px-4">
-      <div className="mx-auto size-10 rounded-full bg-muted flex items-center justify-center mb-3 text-muted-foreground">
-        <AlertCircle className="size-5" />
-      </div>
-      <h4 className="font-medium text-sm text-foreground">{title}</h4>
-      <p className="text-xs text-muted-foreground mt-1">{desc}</p>
-    </div>
-  );
-}
-
-function Th({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <th className={`px-4 py-2.5 text-left font-semibold ${className}`}>{children}</th>;
-}
-
-function Td({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <td className={`px-4 py-3 ${className}`}>{children}</td>;
 }

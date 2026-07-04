@@ -138,6 +138,7 @@ describe("patientStats", () => {
         { id: "pay2", patientId: "p1", visitId: null, date: "2026-02-01", amount: 150, method: "Cash" },
       ],
       appointments: [],
+      toothTreatments: [],
       settings: { clinicName: "Test", currency: "ILS", commonProcedures: [] },
     };
     const stats = patientStats(state, "p1");
@@ -153,6 +154,7 @@ describe("patientStats", () => {
       visits: [],
       payments: [],
       appointments: [],
+      toothTreatments: [],
       settings: { clinicName: "Test", currency: "ILS", commonProcedures: [] },
     };
     const stats = patientStats(state, "p1");
@@ -172,12 +174,13 @@ describe("visitPaymentStatus", () => {
         { id: "p1", patientId: "pt1", visitId: "v1", date: "2026-01-01", amount: 500, method: "Cash" },
       ],
       appointments: [],
+      toothTreatments: [],
       settings: { clinicName: "Test", currency: "ILS", commonProcedures: [] },
     };
     const visit: Visit = { id: "v1", patientId: "pt1", date: "2026-01-01", procedures: [], totalCost: 500 };
     const status = visitPaymentStatus(state, visit);
     expect(status.label).toBe("Paid");
-    expect(status.variant).toBe("paid");
+    expect(status.tone).toBe("success");
   });
 
   it("returns Partial when partially paid", () => {
@@ -188,12 +191,13 @@ describe("visitPaymentStatus", () => {
         { id: "p1", patientId: "pt1", visitId: "v1", date: "2026-01-01", amount: 200, method: "Cash" },
       ],
       appointments: [],
+      toothTreatments: [],
       settings: { clinicName: "Test", currency: "ILS", commonProcedures: [] },
     };
     const visit: Visit = { id: "v1", patientId: "pt1", date: "2026-01-01", procedures: [], totalCost: 500 };
     const status = visitPaymentStatus(state, visit);
     expect(status.label).toBe("Partial");
-    expect(status.variant).toBe("partial");
+    expect(status.tone).toBe("warn");
   });
 
   it("returns Unpaid when nothing paid", () => {
@@ -202,12 +206,13 @@ describe("visitPaymentStatus", () => {
       visits: [],
       payments: [],
       appointments: [],
+      toothTreatments: [],
       settings: { clinicName: "Test", currency: "ILS", commonProcedures: [] },
     };
     const visit: Visit = { id: "v1", patientId: "pt1", date: "2026-01-01", procedures: [], totalCost: 500 };
     const status = visitPaymentStatus(state, visit);
     expect(status.label).toBe("Unpaid");
-    expect(status.variant).toBe("unpaid");
+    expect(status.tone).toBe("destructive");
   });
 
   it("returns Unpaid when totalCost is 0", () => {
@@ -216,11 +221,12 @@ describe("visitPaymentStatus", () => {
       visits: [],
       payments: [],
       appointments: [],
+      toothTreatments: [],
       settings: { clinicName: "Test", currency: "ILS", commonProcedures: [] },
     };
     const visit: Visit = { id: "v1", patientId: "pt1", date: "2026-01-01", procedures: [], totalCost: 0 };
     const status = visitPaymentStatus(state, visit);
     expect(status.label).toBe("Unpaid");
-    expect(status.variant).toBe("unpaid");
+    expect(status.tone).toBe("destructive");
   });
 });

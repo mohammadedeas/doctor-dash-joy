@@ -1,17 +1,34 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Avatar } from "@/components/patient-avatar";
-import { StatusBadge } from "@/components/status-badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Avatar } from "@/components/patient-avatar";
 import { useClinic } from "@/lib/clinic-store";
 import { fmtDate, fmtMoney, patientStats, visitPaymentStatus, calcAge } from "@/lib/clinic-utils";
 import { PatientDialog } from "@/components/patient-dialog";
 import { VisitDialog } from "@/components/visit-dialog";
 import { PaymentDialog } from "@/components/payment-dialog";
-import { ArrowLeft, Pencil, Plus, CreditCard, Calendar, CreditCardIcon } from "lucide-react";
+import {
+  ArrowLeft,
+  Pencil,
+  Plus,
+  CreditCard,
+  Stethoscope,
+  Calendar,
+  Wallet,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
 import { DentalChart } from "@/components/dental";
+import type { ToothClinicalData } from "@/components/dental/types";
+import { TREATMENT_STATUS_CONFIG } from "@/components/dental/treatment-constants";
+import { fetchDentalChart, saveDentalChart } from "@/lib/api-client";
+import { EmptyState } from "@/components/empty-state";
+import { Th, Td } from "@/components/data-table";
+import { MetricStat } from "@/components/metric-stat";
+import { StatusBadge } from "@/components/status-badge";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/patients/$patientId")({
   component: PatientDetail,
@@ -29,6 +46,44 @@ function PatientDetail() {
   const [editVisitId, setEditVisitId] = useState<string | null>(null);
   const [payOpen, setPayOpen] = useState(false);
   const [editPayId, setEditPayId] = useState<string | null>(null);
+  const [expandedVisit, setExpandedVisit] = useState<string | null>(null);
+  const [chartData, setChartData] = useState<Record<number, ToothClinicalData>>({});
+  const [chartLoaded, setChartLoaded] = useState(false);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setChartLoaded(false);
+    fetchDentalChart(patientId)
+      .then((res) => {
+        if (!cancelled) setChartData(res.teeth as Record<number, ToothClinicalData>);
+      })
+      .catch(() => {
+        // No saved chart yet — DentalChart falls back to defaults
+      })
+      .finally(() => {
+        if (!cancelled) setChartLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [patientId]);
+
+  const handleChartChange = (next: Record<number, ToothClinicalData>) => {
+    setChartData(next);
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      saveDentalChart(patientId, next).catch(() => {
+        // Best-effort autosave; the chart stays editable even if this fails
+      });
+    }, 600);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    };
+  }, []);
 
   if (!p) {
     return (
@@ -48,6 +103,11 @@ function PatientDetail() {
   const payments = state.payments
     .filter((py) => py.patientId === p.id)
     .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+  const toothTreatments = state.toothTreatments
+    .filter((t) => t.patientId === p.id)
+    .sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+
+  const lastPaymentDate = payments[0]?.date;
 
   return (
     <>
@@ -80,7 +140,7 @@ function PatientDetail() {
         </div>
       </div>
 
-      {/* Patient Info Card */}
+      {/* ── Section 1: Patient Information ── */}
       <Card className="overflow-hidden p-0 mb-6">
         <div className="flex items-center gap-4 p-5 border-b">
           <Avatar name={p.name} size={56} />
@@ -95,30 +155,10 @@ function PatientDetail() {
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-5 border-b text-sm">
-          <Info label="Age" value={calcAge(p.dob) ?? "—"} />
-          <Info label="Gender" value={p.gender || "—"} />
-          <Info label="Address" value={p.address || "—"} />
-          <Info label="Patient since" value={fmtDate(p.createdAt)} />
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-5 border-b text-sm bg-muted/40">
-          <Info label="Visits" value={<strong>{st.visitCount}</strong>} />
-          <Info
-            label="Total billed"
-            value={<strong>{fmtMoney(st.totalBilled, currency)}</strong>}
-          />
-          <Info
-            label="Total paid"
-            value={<strong className="text-primary">{fmtMoney(st.totalPaid, currency)}</strong>}
-          />
-          <Info
-            label="Balance"
-            value={
-              <strong className={st.balance > 0 ? "text-destructive" : "text-primary"}>
-                {fmtMoney(st.balance, currency)}
-              </strong>
-            }
-          />
+          <MetricStat valueClassName="text-sm mt-1" label="Age" value={calcAge(p.dob) ?? "—"} />
+          <MetricStat valueClassName="text-sm mt-1" label="Gender" value={p.gender || "—"} />
+          <MetricStat valueClassName="text-sm mt-1" label="Address" value={p.address || "—"} />
+          <MetricStat valueClassName="text-sm mt-1" label="Patient since" value={fmtDate(p.createdAt)} />
         </div>
 
         {p.medicalNotes && (
@@ -131,64 +171,175 @@ function PatientDetail() {
         )}
       </Card>
 
-      {/* Dental Chart — Full Width */}
-      <div className="mb-6">
-        <DentalChart
-          patientId={patientId}
-          className="min-h-[500px]"
-          onDataChange={(data) => {
-            // In a real app, persist to backend via API
-            console.log("Dental chart data updated:", data);
-          }}
-        />
-      </div>
+      {/* ── Tabs: Dental Chart / Treatments / Visits / Financial ── */}
+      <Tabs defaultValue="chart" className="mb-6">
+        <TabsList className="grid w-full grid-cols-2 sm:w-auto sm:inline-grid sm:grid-cols-4">
+          <TabsTrigger value="chart">Dental Chart</TabsTrigger>
+          <TabsTrigger value="treatments">
+            Treatments{toothTreatments.length > 0 ? ` (${toothTreatments.length})` : ""}
+          </TabsTrigger>
+          <TabsTrigger value="visits">
+            Visits{visits.length > 0 ? ` (${visits.length})` : ""}
+          </TabsTrigger>
+          <TabsTrigger value="financial">
+            Financial{payments.length > 0 ? ` (${payments.length})` : ""}
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Visits & Payments Tabs */}
-      <Card className="overflow-hidden p-0">
-        <Tabs defaultValue="visits" className="p-0">
-          <div className="px-5 pt-3 border-b">
-            <TabsList>
-              <TabsTrigger value="visits">
-                <Calendar className="h-3.5 w-3.5 mr-1.5" />
-                Visits ({visits.length})
-              </TabsTrigger>
-              <TabsTrigger value="payments">
-                <CreditCardIcon className="h-3.5 w-3.5 mr-1.5" />
-                Payments ({payments.length})
-              </TabsTrigger>
-            </TabsList>
-          </div>
+        {/* ── Dental Chart ── */}
+        <TabsContent value="chart" className="mt-4">
+          {chartLoaded ? (
+            <DentalChart
+              key={patientId}
+              patientId={patientId}
+              initialData={chartData}
+              toothTreatments={toothTreatments}
+              className="min-h-[500px]"
+              onDataChange={handleChartChange}
+            />
+          ) : (
+            <div className="min-h-[500px] rounded-2xl border border-border bg-card animate-pulse" />
+          )}
+        </TabsContent>
 
-          <TabsContent value="visits" className="p-0">
-            {visits.length === 0 ? (
-              <Empty title="No visits recorded" desc="Add the first visit for this patient." />
+        {/* ── Treatment Plan & History ── */}
+        <TabsContent value="treatments" className="mt-4">
+          <Card className="overflow-hidden p-0">
+            <div className="flex items-center gap-3 px-5 py-4 border-b">
+              <div className="size-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+                <Stethoscope className="size-4" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-[15px]">Treatment Plan & History</h3>
+                <p className="text-[11px] text-muted-foreground">
+                  {toothTreatments.length} tooth treatment{toothTreatments.length !== 1 ? "s" : ""} recorded
+                </p>
+              </div>
+            </div>
+
+            {toothTreatments.length === 0 ? (
+              <EmptyState
+                size="sm"
+                title="No treatments recorded"
+                desc="Add treatments during a visit to build the patient's dental history."
+              />
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
                     <tr>
-                      <Th>Date</Th>
-                      <Th>Procedures</Th>
-                      <Th>Cost</Th>
-                      <Th>Paid for visit</Th>
+                      <Th>Tooth</Th>
+                      <Th>Procedure</Th>
                       <Th>Status</Th>
-                      <Th />
+                      <Th>Date</Th>
+                      <Th>Notes</Th>
+                      <Th className="text-right">Cost</Th>
                     </tr>
                   </thead>
                   <tbody>
-                    {visits.map((v) => {
-                      const status = visitPaymentStatus(state, v);
-                      const procs = v.procedures.map((pr) => pr.name).join(", ");
+                    {toothTreatments.map((t) => {
+                      const cfg = TREATMENT_STATUS_CONFIG[t.status];
+                      const visit = state.visits.find((v) => v.id === t.visitId);
                       return (
-                        <tr key={v.id} className="border-t">
-                          <Td className="font-medium">{fmtDate(v.date)}</Td>
-                          <Td>{procs || "—"}</Td>
-                          <Td>{fmtMoney(v.totalCost, currency)}</Td>
-                          <Td>{fmtMoney(status.paid, currency)}</Td>
+                        <tr key={t.id} className="border-t">
+                          <Td className="font-medium">{t.toothNumber}</Td>
+                          <Td>{t.procedure}</Td>
                           <Td>
-                            <StatusBadge variant={status.variant}>{status.label}</StatusBadge>
+                            <StatusBadge tone={cfg.tone} dot>{cfg.label}</StatusBadge>
                           </Td>
-                          <Td className="text-right">
+                          <Td className="text-muted-foreground">
+                            {fmtDate(visit?.date || t.createdAt.slice(0, 10))}
+                          </Td>
+                          <Td className="text-muted-foreground max-w-[200px] truncate">{t.notes || "—"}</Td>
+                          <Td className="text-right">{fmtMoney(t.cost || 0, currency)}</Td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
+        </TabsContent>
+
+        {/* ── Visits Summary ── */}
+        <TabsContent value="visits" className="mt-4">
+          <Card className="overflow-hidden p-0">
+            <div className="flex items-center gap-3 px-5 py-4 border-b">
+              <div className="size-8 rounded-lg bg-sky-500/10 text-sky-600 flex items-center justify-center">
+                <Calendar className="size-4" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-[15px]">Visits Summary</h3>
+                <p className="text-[11px] text-muted-foreground">
+                  {visits.length} visit{visits.length !== 1 ? "s" : ""} on record
+                </p>
+              </div>
+            </div>
+
+            {visits.length === 0 ? (
+              <EmptyState size="sm" title="No visits recorded" desc="Add the first visit for this patient." />
+            ) : (
+              <div className="divide-y divide-border">
+                {visits.map((v) => {
+                  const status = visitPaymentStatus(state, v);
+                  const balance = (v.totalCost || 0) - status.paid;
+                  const visitTreatments = state.toothTreatments.filter((t) => t.visitId === v.id);
+                  const isExpanded = expandedVisit === v.id;
+                  return (
+                    <div key={v.id} className="group">
+                      <div
+                        className="flex items-center justify-between px-5 py-3 hover:bg-muted/30 cursor-pointer transition-colors"
+                        onClick={() => setExpandedVisit(isExpanded ? null : v.id)}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <button className="shrink-0 text-muted-foreground hover:text-foreground">
+                            {isExpanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+                          </button>
+                          <div className="min-w-0">
+                            <div className="text-sm font-medium">{fmtDate(v.date)}</div>
+                            <div className="text-[11px] text-muted-foreground">
+                              {v.notes ? v.notes : "Treatment Visit"}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4 text-sm shrink-0 ml-4">
+                          <span className="text-muted-foreground">
+                            {visitTreatments.length} treatment{visitTreatments.length !== 1 ? "s" : ""}
+                          </span>
+                          <span className="font-medium">{fmtMoney(v.totalCost, currency)}</span>
+                          <span className="text-muted-foreground">Paid {fmtMoney(status.paid, currency)}</span>
+                          <span
+                            className={cn(
+                              "text-xs font-medium",
+                              balance > 0 ? "text-destructive" : "text-emerald-600"
+                            )}
+                          >
+                            {balance > 0 ? `Bal ${fmtMoney(balance, currency)}` : status.paid > 0 ? "Paid" : "Unpaid"}
+                          </span>
+                        </div>
+                      </div>
+
+                      {isExpanded && (
+                        <div className="px-5 pb-4 bg-muted/20">
+                          {visitTreatments.length > 0 && (
+                            <div className="mb-3">
+                              <div className="text-[11px] uppercase tracking-wider font-medium text-muted-foreground mb-1.5">
+                                Treatments in this visit
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                {visitTreatments.map((t) => {
+                                  const cfg = TREATMENT_STATUS_CONFIG[t.status];
+                                  return (
+                                    <StatusBadge key={t.id} tone={cfg.tone} dot>
+                                      Tooth {t.toothNumber}: {t.procedure}
+                                    </StatusBadge>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                          <div className="flex gap-2">
                             <Button
                               variant="outline"
                               size="sm"
@@ -197,21 +348,53 @@ function PatientDetail() {
                                 setVisitOpen(true);
                               }}
                             >
-                              Edit
+                              Edit Visit
                             </Button>
-                          </Td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
-          </TabsContent>
+          </Card>
+        </TabsContent>
 
-          <TabsContent value="payments" className="p-0">
+        {/* ── Financial Summary ── */}
+        <TabsContent value="financial" className="mt-4">
+          <Card className="overflow-hidden p-0">
+            <div className="flex items-center gap-3 px-5 py-4 border-b">
+              <div className="size-8 rounded-lg bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
+                <Wallet className="size-4" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-[15px]">Financial Summary</h3>
+                <p className="text-[11px] text-muted-foreground">
+                  {payments.length} payment{payments.length !== 1 ? "s" : ""} recorded
+                </p>
+              </div>
+            </div>
+
+            {/* Stats row */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-5 border-b text-sm bg-muted/30">
+              <MetricStat valueClassName="text-sm mt-1" label="Total Cost" value={<strong>{fmtMoney(st.totalBilled, currency)}</strong>} />
+              <MetricStat valueClassName="text-sm mt-1" label="Total Paid" value={<strong className="text-primary">{fmtMoney(st.totalPaid, currency)}</strong>} />
+              <MetricStat
+                valueClassName="text-sm mt-1"
+                label="Balance"
+                value={
+                  <strong className={st.balance > 0 ? "text-destructive" : "text-emerald-600"}>
+                    {fmtMoney(st.balance, currency)}
+                  </strong>
+                }
+              />
+              <MetricStat valueClassName="text-sm mt-1" label="Last Payment" value={lastPaymentDate ? fmtDate(lastPaymentDate) : "—"} />
+            </div>
+
+            {/* Payment history */}
             {payments.length === 0 ? (
-              <Empty title="No payments recorded" desc="Record a payment for this patient." />
+              <EmptyState size="sm" title="No payments recorded" desc="Record a payment for this patient." />
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -219,10 +402,9 @@ function PatientDetail() {
                     <tr>
                       <Th>Date</Th>
                       <Th>Method</Th>
-                      <Th>For visit</Th>
-                      <Th>Treatments</Th>
+                      <Th>For Visit</Th>
                       <Th className="text-right">Amount</Th>
-                      <Th />
+                      <Th className="w-10" />
                     </tr>
                   </thead>
                   <tbody>
@@ -232,22 +414,13 @@ function PatientDetail() {
                         <tr key={py.id} className="border-t">
                           <Td className="font-medium">{fmtDate(py.date)}</Td>
                           <Td>{py.method}</Td>
-                          <Td>
-                            {v ? (
-                              fmtDate(v.date)
-                            ) : (
-                              <span className="text-muted-foreground">General</span>
-                            )}
-                          </Td>
-                          <Td className="text-muted-foreground max-w-[160px] truncate">
-                            {py.procedureNames?.join(", ") || (v ? "—" : "General")}
-                          </Td>
-                          <Td className="text-right font-semibold">
+                          <Td className="text-muted-foreground">{v ? fmtDate(v.date) : "General"}</Td>
+                          <Td className="text-right font-semibold text-emerald-600">
                             {fmtMoney(py.amount, currency)}
                           </Td>
                           <Td className="text-right">
                             <Button
-                              variant="outline"
+                              variant="ghost"
                               size="sm"
                               onClick={() => {
                                 setEditPayId(py.id);
@@ -264,50 +437,13 @@ function PatientDetail() {
                 </table>
               </div>
             )}
-          </TabsContent>
-        </Tabs>
-      </Card>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
       <PatientDialog open={editPatient} onOpenChange={setEditPatient} patientId={p.id} />
-      <VisitDialog
-        open={visitOpen}
-        onOpenChange={setVisitOpen}
-        visitId={editVisitId}
-        defaultPatientId={p.id}
-      />
-      <PaymentDialog
-        open={payOpen}
-        onOpenChange={setPayOpen}
-        paymentId={editPayId}
-        defaultPatientId={p.id}
-      />
+      <VisitDialog open={visitOpen} onOpenChange={setVisitOpen} visitId={editVisitId} defaultPatientId={p.id} />
+      <PaymentDialog open={payOpen} onOpenChange={setPayOpen} paymentId={editPayId} defaultPatientId={p.id} />
     </>
   );
-}
-
-function Info({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div>
-      <div className="text-[11px] uppercase tracking-wider font-medium text-muted-foreground">
-        {label}
-      </div>
-      <div className="text-sm mt-1">{value}</div>
-    </div>
-  );
-}
-
-function Empty({ title, desc }: { title: string; desc: string }) {
-  return (
-    <div className="text-center py-12 px-4 text-muted-foreground">
-      <h4 className="text-foreground font-medium text-sm">{title}</h4>
-      <p className="text-xs mt-1">{desc}</p>
-    </div>
-  );
-}
-
-function Th({ children, className = "" }: { children?: React.ReactNode; className?: string }) {
-  return <th className={`px-4 py-2.5 text-left font-medium ${className}`}>{children}</th>;
-}
-function Td({ children, className = "" }: { children?: React.ReactNode; className?: string }) {
-  return <td className={`px-4 py-3 ${className}`}>{children}</td>;
 }

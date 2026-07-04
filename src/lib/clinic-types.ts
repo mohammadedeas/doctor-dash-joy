@@ -1,5 +1,20 @@
 export type Procedure = { name: string; cost: number };
 
+export type TreatmentStatus = "Planned" | "In Progress" | "Completed" | "Cancelled" | "Referred" | "Failed";
+
+export interface ToothTreatment {
+  id: string;
+  patientId: string;
+  visitId: string;
+  toothNumber: number;
+  procedure: string;
+  status: TreatmentStatus;
+  notes?: string;
+  cost?: number;
+  createdAt: string;
+  doctorName?: string;
+}
+
 export type Patient = {
   id: string;
   name: string;
@@ -64,6 +79,7 @@ export type ClinicState = {
   visits: Visit[];
   payments: Payment[];
   appointments: Appointment[];
+  toothTreatments: ToothTreatment[];
   settings: ClinicSettings;
 };
 
@@ -72,6 +88,7 @@ export const defaultClinicState: ClinicState = {
   visits: [],
   payments: [],
   appointments: [],
+  toothTreatments: [],
   settings: {
     clinicName: "My Dental Clinic",
     currency: "ILS",
@@ -87,3 +104,23 @@ export const defaultClinicState: ClinicState = {
     ],
   },
 };
+
+/** Validate and normalize potentially corrupted localStorage state */
+export function normalizeClinicState(raw: unknown): ClinicState {
+  if (!raw || typeof raw !== "object") return structuredClone(defaultClinicState);
+  const data = raw as Partial<ClinicState>;
+  return {
+    patients: Array.isArray(data.patients) ? data.patients : [],
+    visits: Array.isArray(data.visits) ? data.visits : [],
+    payments: Array.isArray(data.payments) ? data.payments : [],
+    appointments: Array.isArray(data.appointments) ? data.appointments : [],
+    toothTreatments: Array.isArray(data.toothTreatments) ? data.toothTreatments : [],
+    settings: {
+      clinicName: data.settings?.clinicName || defaultClinicState.settings.clinicName,
+      currency: data.settings?.currency || defaultClinicState.settings.currency,
+      commonProcedures: Array.isArray(data.settings?.commonProcedures)
+        ? data.settings.commonProcedures
+        : defaultClinicState.settings.commonProcedures,
+    },
+  };
+}

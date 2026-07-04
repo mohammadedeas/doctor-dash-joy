@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { AUTH_TOKEN_KEY, request } from "./api-client";
 
 export type User = {
   id: string;
@@ -25,27 +26,20 @@ type AuthCtx = {
 
 const AuthContext = createContext<AuthCtx | null>(null);
 
-const TOKEN_KEY = "clinic_auth_token";
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchMe = useCallback(async () => {
-    const token = localStorage.getItem(TOKEN_KEY);
-    if (!token) {
+    if (!localStorage.getItem(AUTH_TOKEN_KEY)) {
       setIsLoading(false);
       return;
     }
     try {
-      const res = await fetch("/api/auth/me", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error("Session expired");
-      const data = await res.json();
+      const data = await request<{ user: User }>("/auth/me");
       setUser(data.user);
     } catch {
-      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(AUTH_TOKEN_KEY);
       setUser(null);
     } finally {
       setIsLoading(false);
@@ -57,24 +51,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [fetchMe]);
 
   const login = useCallback(async (username: string, password: string) => {
-    const res = await fetch("/api/auth/login", {
+    const data = await request<{ token: string; user: User }>("/auth/login", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username, password }),
     });
-
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(body.error || "Invalid credentials");
-    }
-
-    const data = await res.json();
-    localStorage.setItem(TOKEN_KEY, data.token);
+    localStorage.setItem(AUTH_TOKEN_KEY, data.token);
     setUser(data.user);
   }, []);
 
   const logout = useCallback(() => {
-    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(AUTH_TOKEN_KEY);
     setUser(null);
     window.location.href = "/login";
   }, []);

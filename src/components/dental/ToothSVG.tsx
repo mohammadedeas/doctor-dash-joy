@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import type { ToothCondition } from "./types";
 import type { ToothMeta } from "./constants";
+import type { TreatmentStatus } from "./treatment-constants";
 import { TOOTH_PATHS, ROOT_PATHS, OCCLUSAL_DETAIL, TOOTH_VIEWBOX } from "./tooth-paths";
 import { cn } from "@/lib/utils";
 
@@ -8,8 +9,9 @@ interface ToothSVGProps {
   tooth: ToothMeta;
   selected?: boolean;
   conditions?: ToothCondition[];
+  treatmentStatus?: TreatmentStatus;
   onClick?: (tooth: ToothMeta) => void;
-  onHover?: (tooth: ToothMeta | null) => void;
+  onHover?: (tooth: ToothMeta | null, event?: React.MouseEvent) => void;
   className?: string;
   size?: number;
 }
@@ -18,6 +20,7 @@ export function ToothSVG({
   tooth,
   selected = false,
   conditions = [],
+  treatmentStatus,
   onClick,
   onHover,
   className,
@@ -54,13 +57,14 @@ export function ToothSVG({
   return (
     <motion.button
       type="button"
+      aria-label={`Tooth ${tooth.iso} — ${tooth.name}`}
       className={cn(
         "relative flex flex-col items-center justify-center outline-none focus:outline-none rounded-lg",
         className
       )}
       style={{ width: size, height: size * 1.7 }}
       onClick={() => onClick?.(tooth)}
-      onMouseEnter={() => onHover?.(tooth)}
+      onMouseEnter={(e) => onHover?.(tooth, e)}
       onMouseLeave={() => onHover?.(null)}
       whileHover={{ scale: isMissing ? 1 : 1.08 }}
       whileTap={{ scale: isMissing ? 1 : 0.95 }}
@@ -201,6 +205,22 @@ export function ToothSVG({
           </g>
         )}
       </svg>
+
+      {/* Treatment status dot */}
+      {treatmentStatus && (
+        <div
+          className={cn(
+            "absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white dark:border-card",
+            treatmentStatus === "Planned" && "bg-blue-500",
+            treatmentStatus === "In Progress" && "bg-orange-500",
+            treatmentStatus === "Completed" && "bg-emerald-500",
+            treatmentStatus === "Cancelled" && "bg-slate-500",
+            treatmentStatus === "Referred" && "bg-purple-500",
+            treatmentStatus === "Failed" && "bg-red-500",
+          )}
+          title={treatmentStatus}
+        />
+      )}
 
       {/* Selected indicator */}
       {selected && (

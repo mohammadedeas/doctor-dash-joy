@@ -1,9 +1,11 @@
-import type { ClinicState, ClinicSettings, Patient, Visit, Payment, Procedure, Appointment } from "./clinic-types";
+import type { ClinicState, ClinicSettings, Patient, Visit, Payment, Procedure, Appointment, ToothTreatment } from "./clinic-types";
+
+export const AUTH_TOKEN_KEY = "clinic_auth_token";
 
 const BASE = "/api";
 
-async function request<T>(url: string, options?: RequestInit): Promise<T> {
-  const token = typeof window !== "undefined" ? localStorage.getItem("clinic_auth_token") : null;
+export async function request<T>(url: string, options?: RequestInit): Promise<T> {
+  const token = typeof window !== "undefined" ? localStorage.getItem(AUTH_TOKEN_KEY) : null;
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -105,3 +107,36 @@ export const updateAppointment = (id: string, data: Partial<Appointment>) =>
 
 export const deleteAppointmentApi = (id: string) =>
   request<{ success: boolean }>(`/appointments/${id}`, { method: "DELETE" });
+
+// ── Tooth Treatments ────────────────────────────────────────────────
+export const fetchToothTreatments = (params?: { patientId?: string; visitId?: string }) => {
+  const qs = params ? "?" + new URLSearchParams(params as Record<string, string>).toString() : "";
+  return request<ToothTreatment[]>(`/tooth-treatments${qs}`);
+};
+
+export const createToothTreatment = (data: Omit<ToothTreatment, "id" | "createdAt">) =>
+  request<ToothTreatment>("/tooth-treatments", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+
+export const updateToothTreatment = (id: string, data: Partial<ToothTreatment>) =>
+  request<ToothTreatment>(`/tooth-treatments/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+
+export const deleteToothTreatment = (id: string) =>
+  request<{ success: boolean }>(`/tooth-treatments/${id}`, { method: "DELETE" });
+
+// ── Dental Chart (clinical findings) ───────────────────────────────
+export const fetchDentalChart = (patientId: string) =>
+  request<{ patientId: string; teeth: Record<number, unknown>; updatedAt: string | null }>(
+    `/dental-chart/${patientId}`
+  );
+
+export const saveDentalChart = (patientId: string, teeth: Record<number, unknown>) =>
+  request<{ patientId: string; teeth: Record<number, unknown>; updatedAt: string }>(
+    `/dental-chart/${patientId}`,
+    { method: "PUT", body: JSON.stringify({ teeth }) }
+  );

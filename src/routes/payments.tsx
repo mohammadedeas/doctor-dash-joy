@@ -4,6 +4,8 @@ import { PageHeader } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { EmptyState } from "@/components/empty-state";
+import { Th, Td } from "@/components/data-table";
 import { useClinic } from "@/lib/clinic-store";
 import { fmtDate, fmtMoney } from "@/lib/clinic-utils";
 import { PaymentDialog } from "@/components/payment-dialog";
@@ -63,7 +65,7 @@ function PaymentsPage() {
 
       <Card className="overflow-hidden p-0">
         {payments.length === 0 ? (
-          <Empty title="No payments yet" desc="Record your first payment." />
+          <EmptyState title="No payments yet" desc="Record your first payment." />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -127,19 +129,4 @@ function PaymentsPage() {
       <PaymentDialog open={open} onOpenChange={setOpen} paymentId={editId} />
     </>
   );
-}
-
-function Empty({ title, desc }: { title: string; desc: string }) {
-  return (
-    <div className="text-center py-12 px-4 text-muted-foreground">
-      <h4 className="text-foreground font-medium text-sm">{title}</h4>
-      <p className="text-xs mt-1">{desc}</p>
-    </div>
-  );
-}
-function Th({ children, className = "" }: { children?: React.ReactNode; className?: string }) {
-  return <th className={`px-4 py-2.5 text-left font-medium ${className}`}>{children}</th>;
-}
-function Td({ children, className = "" }: { children?: React.ReactNode; className?: string }) {
-  return <td className={`px-4 py-3 ${className}`}>{children}</td>;
 }

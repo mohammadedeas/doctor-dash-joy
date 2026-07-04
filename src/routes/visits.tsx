@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/status-badge";
+import { EmptyState } from "@/components/empty-state";
+import { Th, Td } from "@/components/data-table";
 import { useClinic } from "@/lib/clinic-store";
 import { fmtDate, fmtMoney, visitPaymentStatus } from "@/lib/clinic-utils";
 import { VisitDialog } from "@/components/visit-dialog";
@@ -62,7 +64,7 @@ function VisitsPage() {
 
       <Card className="overflow-hidden p-0">
         {visits.length === 0 ? (
-          <Empty title="No visits yet" desc='Click "New Visit" to record the first one.' />
+          <EmptyState title="No visits yet" desc='Click "New Visit" to record the first one.' />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -81,6 +83,10 @@ function VisitsPage() {
                   const p = state.patients.find((pt) => pt.id === v.patientId);
                   const status = visitPaymentStatus(state, v);
                   const procs = v.procedures.map((pr) => pr.name).join(", ");
+                  const visitTreatments = state.toothTreatments.filter((t) => t.visitId === v.id);
+                  const treatmentSummary = visitTreatments.length > 0
+                    ? `${visitTreatments.length} tooth treatment${visitTreatments.length !== 1 ? "s" : ""}`
+                    : "";
                   return (
                     <tr key={v.id} className="border-t">
                       <Td className="font-medium">{fmtDate(v.date)}</Td>
@@ -97,10 +103,18 @@ function VisitsPage() {
                           {p?.name || "—"}
                         </button>
                       </Td>
-                      <Td>{procs || "—"}</Td>
+                      <Td>
+                        <div className="space-y-0.5">
+                          {procs && <div>{procs}</div>}
+                          {treatmentSummary && (
+                            <div className="text-xs text-muted-foreground">{treatmentSummary}</div>
+                          )}
+                          {!procs && !treatmentSummary && "—"}
+                        </div>
+                      </Td>
                       <Td>{fmtMoney(v.totalCost, currency)}</Td>
                       <Td>
-                        <StatusBadge variant={status.variant}>{status.label}</StatusBadge>
+                        <StatusBadge tone={status.tone}>{status.label}</StatusBadge>
                       </Td>
                       <Td className="text-right">
                         <Button
@@ -126,19 +140,4 @@ function VisitsPage() {
       <VisitDialog open={open} onOpenChange={setOpen} visitId={editId} />
     </>
   );
-}
-
-function Empty({ title, desc }: { title: string; desc: string }) {
-  return (
-    <div className="text-center py-12 px-4 text-muted-foreground">
-      <h4 className="text-foreground font-medium text-sm">{title}</h4>
-      <p className="text-xs mt-1">{desc}</p>
-    </div>
-  );
-}
-function Th({ children, className = "" }: { children?: React.ReactNode; className?: string }) {
-  return <th className={`px-4 py-2.5 text-left font-medium ${className}`}>{children}</th>;
-}
-function Td({ children, className = "" }: { children?: React.ReactNode; className?: string }) {
-  return <td className={`px-4 py-3 ${className}`}>{children}</td>;
 }

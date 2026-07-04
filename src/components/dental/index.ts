@@ -1,10 +1,15 @@
 export { DentalChart } from "./DentalChart";
+export { TreatmentDentalChart } from "./TreatmentDentalChart";
+export { ToothMap, LegendItem } from "./ToothMap";
 export { ToothSVG } from "./ToothSVG";
+export { JawLabel } from "./JawLabel";
 export { ToothDetailPanel } from "./ToothDetailPanel";
 export { EndoPanel } from "./EndoPanel";
 export { PerioPanel } from "./PerioPanel";
 export { ConditionsPanel } from "./ConditionsPanel";
 export { XrayPanel } from "./XrayPanel";
 export { ToothHistoryPanel } from "./ToothHistoryPanel";
+export { TreatmentEntryPanel } from "./TreatmentEntryPanel";
 export * from "./types";
 export * from "./constants";
+export * from "./treatment-constants";

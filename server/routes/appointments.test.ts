@@ -17,7 +17,7 @@ describe("Appointments Routes", () => {
   beforeAll(async () => {
     await setupTestDb();
     agent = request(app);
-    const user = await createTestUser("apptadmin", "pass123", "Admin");
+    const user = await createTestUser("apptadmin", "pass123", "Admin", "admin");
     token = await getAuthToken(agent, user.username, user.password);
   });
   afterAll(() => {

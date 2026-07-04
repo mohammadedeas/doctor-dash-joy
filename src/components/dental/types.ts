@@ -178,75 +178,70 @@ export const ENDO_RESULT_CONFIG: Record<
   },
 };
 
+// Colors reuse the app's semantic status tokens where the meaning lines up
+// (caries/fracture = concerning finding -> destructive, root canal = procedural -> info,
+// extraction planned = needs action -> warn, mobility = flagged for review -> purple).
+// A few dental-specific conventions (crown/bridge gold, veneer teal, furcation pink) keep
+// bespoke colors since there's no generic token for them, but the palette is curated to
+// stay visually distinct across the smaller set of hues actually in use.
 export const CONDITION_CONFIG: Record<
   ToothCondition,
-  { label: string; color: string; fill: string; stroke: string }
+  { label: string; color: string; fill: string }
 > = {
   caries: {
     label: "Caries",
-    color: "text-red-600",
-    fill: "#ef4444",
-    stroke: "#dc2626",
+    color: "text-destructive",
+    fill: "var(--destructive)",
   },
   crown: {
     label: "Crown",
     color: "text-amber-600",
-    fill: "#fbbf24",
-    stroke: "#d97706",
+    fill: "#d97706",
   },
   implant: {
     label: "Implant",
     color: "text-muted-foreground",
-    fill: "#94a3b8",
-    stroke: "#64748b",
+    fill: "var(--muted-foreground)",
   },
   missing: {
     label: "Missing",
     color: "text-muted-foreground",
     fill: "transparent",
-    stroke: "#9ca3af",
   },
   fracture: {
     label: "Fracture",
-    color: "text-rose-600",
-    fill: "#fda4af",
-    stroke: "#e11d48",
+    color: "text-destructive",
+    fill: "var(--destructive)",
   },
   rootCanal: {
     label: "Root Canal",
-    color: "text-blue-600",
-    fill: "#60a5fa",
-    stroke: "#2563eb",
+    color: "text-info",
+    fill: "var(--info)",
   },
   bridge: {
     label: "Bridge",
-    color: "text-amber-700",
-    fill: "#f59e0b",
-    stroke: "#b45309",
+    color: "text-amber-600",
+    fill: "#d97706",
   },
   veneer: {
     label: "Veneer",
     color: "text-teal-600",
-    fill: "#5eead4",
-    stroke: "#0d9488",
+    fill: "#0d9488",
   },
   extractionPlanned: {
     label: "Extraction Planned",
-    color: "text-orange-600",
-    fill: "#fb923c",
-    stroke: "#ea580c",
+    color: "text-warn",
+    fill: "var(--warn)",
   },
   mobility: {
     label: "Mobility",
-    color: "text-purple-600",
-    fill: "#c084fc",
-    stroke: "#9333ea",
+    color: "text-purple",
+    fill: "var(--purple)",
   },
   furcation: {
     label: "Furcation",
     color: "text-pink-600",
-    fill: "#f9a8d4",
-    stroke: "#db2777",
+    fill: "#db2777",
   },
 };
 

@@ -1,17 +1,26 @@
 import { Router, Request, Response } from "express";
 import db from "../db.js";
 import { randomUUID } from "crypto";
+import { handleError, parsePagination } from "../lib/http.js";
+import { validateBody, paymentCreateSchema, paymentUpdateSchema } from "../lib/schemas.js";
 
 const router = Router();
 
 // ── List all payments ───────────────────────────────────────────────
-router.get("/", async (_req: Request, res: Response) => {
+router.get("/", async (req: Request, res: Response) => {
   try {
-    const rs = await db.execute("SELECT * FROM payments ORDER BY date DESC");
+    const { limit, offset } = parsePagination(req.query);
+    let sql = "SELECT * FROM payments ORDER BY date DESC";
+    const args: number[] = [];
+    if (limit !== undefined) {
+      sql += " LIMIT ? OFFSET ?";
+      args.push(limit, offset);
+    }
+    const rs = await db.execute({ sql, args });
     const payments = rs.rows.map(mapRow);
     res.json(payments);
   } catch (err) {
-    res.status(500).json({ error: String(err) });
+    handleError(res, err, "payments");
   }
 });
 
@@ -26,15 +35,13 @@ router.get("/:id", async (req: Request, res: Response) => {
     if (!row) return res.status(404).json({ error: "Payment not found" });
     res.json(mapRow(row));
   } catch (err) {
-    res.status(500).json({ error: String(err) });
+    handleError(res, err, "payments");
   }
 });
 
 // ── Create payment ──────────────────────────────────────────────────
-router.post("/", async (req: Request, res: Response) => {
+router.post("/", validateBody(paymentCreateSchema), async (req: Request, res: Response) => {
   const { patientId, visitId, date, amount, method, notes, procedureNames } = req.body;
-  if (!patientId || !date)
-    return res.status(400).json({ error: "patientId and date are required" });
 
   const id = randomUUID().slice(0, 12);
   const procNamesStr = Array.isArray(procedureNames)
@@ -62,12 +69,12 @@ router.post("/", async (req: Request, res: Response) => {
     const rs = await db.execute({ sql: "SELECT * FROM payments WHERE id = ?", args: [id] });
     res.status(201).json(mapRow(rs.rows[0]));
   } catch (err) {
-    res.status(500).json({ error: String(err) });
+    handleError(res, err, "payments");
   }
 });
 
 // ── Update payment ──────────────────────────────────────────────────
-router.put("/:id", async (req: Request, res: Response) => {
+router.put("/:id", validateBody(paymentUpdateSchema), async (req: Request, res: Response) => {
   try {
     const rsEx = await db.execute({
       sql: "SELECT * FROM payments WHERE id = ?",
@@ -104,7 +111,7 @@ router.put("/:id", async (req: Request, res: Response) => {
     });
     res.json(mapRow(rs.rows[0]));
   } catch (err) {
-    res.status(500).json({ error: String(err) });
+    handleError(res, err, "payments");
   }
 });
 
@@ -120,7 +127,7 @@ router.delete("/:id", async (req: Request, res: Response) => {
     await db.execute({ sql: "DELETE FROM payments WHERE id = ?", args: [req.params.id as string] });
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: String(err) });
+    handleError(res, err, "payments");
   }
 });
 

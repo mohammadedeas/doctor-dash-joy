@@ -42,8 +42,13 @@ function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="w-full max-w-sm">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-4">
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute -top-32 -right-24 size-96 rounded-full bg-primary/10 blur-3xl" />
+        <div className="absolute -bottom-40 -left-32 size-96 rounded-full bg-sky-300/15 blur-3xl dark:bg-sky-500/10" />
+      </div>
+
+      <div className="relative w-full max-w-sm">
         <div className="mb-8 flex items-center justify-center gap-2.5">
           <div className="size-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
             <Stethoscope className="size-5" />
@@ -56,7 +61,7 @@ function LoginPage() {
           </div>
         </div>
 
-        <Card>
+        <Card className="shadow-lg">
           <CardHeader className="space-y-1">
             <CardTitle className="text-xl">Sign in</CardTitle>
             <CardDescription>Enter your credentials to access the clinic dashboard</CardDescription>

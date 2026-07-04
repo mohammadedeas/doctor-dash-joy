@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { MetricStat } from "@/components/metric-stat";
 import { toast } from "sonner";
 import {
   Calendar as CalendarIcon,
@@ -452,22 +453,21 @@ function CalendarPage() {
             <h3 className="font-semibold text-sm">Quick Stats</h3>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <StatBox label="Today" value={String(todayAppointments.length)} />
-            <StatBox
+            <MetricStat variant="tile" label="Today" value={todayAppointments.length} />
+            <MetricStat
+              variant="tile"
               label="Upcoming"
-              value={String(
-                state.appointments.filter((a) => a.date > today && a.status !== "cancelled").length
-              )}
+              value={state.appointments.filter((a) => a.date > today && a.status !== "cancelled").length}
             />
-            <StatBox
+            <MetricStat
+              variant="tile"
               label="Pending"
-              value={String(state.appointments.filter((a) => a.status === "pending").length)}
+              value={state.appointments.filter((a) => a.status === "pending").length}
             />
-            <StatBox
+            <MetricStat
+              variant="tile"
               label="Missed"
-              value={String(
-                state.appointments.filter((a) => a.date < today && a.status === "pending").length
-              )}
+              value={state.appointments.filter((a) => a.date < today && a.status === "pending").length}
             />
           </div>
         </Card>
@@ -481,15 +481,6 @@ function CalendarPage() {
         defaultStartTime={defaultStartTime}
         defaultEndTime={defaultEndTime}
       />
-    </div>
-  );
-}
-
-function StatBox({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-md bg-muted/50 px-3 py-2 text-center">
-      <div className="text-lg font-semibold font-display">{value}</div>
-      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
     </div>
   );
 }

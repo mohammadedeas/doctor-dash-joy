@@ -1,17 +1,26 @@
 import { Router, Request, Response } from "express";
 import db from "../db.js";
 import { randomUUID } from "crypto";
+import { handleError, parsePagination } from "../lib/http.js";
+import { validateBody, patientCreateSchema, patientUpdateSchema } from "../lib/schemas.js";
 
 const router = Router();
 
 // ── List all patients ───────────────────────────────────────────────
-router.get("/", async (_req: Request, res: Response) => {
+router.get("/", async (req: Request, res: Response) => {
   try {
-    const rs = await db.execute("SELECT * FROM patients ORDER BY name ASC");
+    const { limit, offset } = parsePagination(req.query);
+    let sql = "SELECT * FROM patients ORDER BY name ASC";
+    const args: number[] = [];
+    if (limit !== undefined) {
+      sql += " LIMIT ? OFFSET ?";
+      args.push(limit, offset);
+    }
+    const rs = await db.execute({ sql, args });
     const patients = rs.rows.map(mapRow);
     res.json(patients);
   } catch (err) {
-    res.status(500).json({ error: String(err) });
+    handleError(res, err, "patients");
   }
 });
 
@@ -23,14 +32,13 @@ router.get("/:id", async (req: Request, res: Response) => {
     if (!row) return res.status(404).json({ error: "Patient not found" });
     res.json(mapRow(row));
   } catch (err) {
-    res.status(500).json({ error: String(err) });
+    handleError(res, err, "patients");
   }
 });
 
 // ── Create patient ──────────────────────────────────────────────────
-router.post("/", async (req: Request, res: Response) => {
+router.post("/", validateBody(patientCreateSchema), async (req: Request, res: Response) => {
   const { name, phone, email, dob, gender, address, medicalNotes } = req.body;
-  if (!name) return res.status(400).json({ error: "Name is required" });
 
   const id = randomUUID().slice(0, 12);
   const createdAt = new Date().toISOString();
@@ -47,12 +55,12 @@ router.post("/", async (req: Request, res: Response) => {
     const rs = await db.execute({ sql: "SELECT * FROM patients WHERE id = ?", args: [id] });
     res.status(201).json(mapRow(rs.rows[0]));
   } catch (err) {
-    res.status(500).json({ error: String(err) });
+    handleError(res, err, "patients");
   }
 });
 
 // ── Update patient ──────────────────────────────────────────────────
-router.put("/:id", async (req: Request, res: Response) => {
+router.put("/:id", validateBody(patientUpdateSchema), async (req: Request, res: Response) => {
   try {
     const rsEx = await db.execute({ sql: "SELECT * FROM patients WHERE id = ?", args: [req.params.id as string] });
     const existing = rsEx.rows[0];
@@ -80,7 +88,7 @@ router.put("/:id", async (req: Request, res: Response) => {
     const rs = await db.execute({ sql: "SELECT * FROM patients WHERE id = ?", args: [req.params.id as string] });
     res.json(mapRow(rs.rows[0]));
   } catch (err) {
-    res.status(500).json({ error: String(err) });
+    handleError(res, err, "patients");
   }
 });
 
@@ -93,7 +101,7 @@ router.delete("/:id", async (req: Request, res: Response) => {
     await db.execute({ sql: "DELETE FROM patients WHERE id = ?", args: [req.params.id as string] });
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: String(err) });
+    handleError(res, err, "patients");
   }
 });
 

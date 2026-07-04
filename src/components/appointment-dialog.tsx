@@ -161,6 +161,28 @@ export function AppointmentDialog({
           <TabsContent value="scheduling" className="space-y-4 mt-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
+                <Label>Patient *</Label>
+                <Select value={patientId} onValueChange={setPatientId} disabled={!!existing}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="— Select patient —" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {sortedPatients.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Phone</Label>
+                <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
                 <Label>Visit type</Label>
                 <Input
                   value={visitType}
@@ -207,28 +229,6 @@ export function AppointmentDialog({
           </TabsContent>
 
           <TabsContent value="details" className="space-y-4 mt-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Patient *</Label>
-                <Select value={patientId} onValueChange={setPatientId} disabled={!!existing}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="— Select patient —" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {sortedPatients.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Phone</Label>
-                <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
-              </div>
-            </div>
-
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Status</Label>

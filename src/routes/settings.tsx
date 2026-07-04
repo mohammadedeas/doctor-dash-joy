@@ -5,6 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { MetricStat } from "@/components/metric-stat";
+import { EmptyState } from "@/components/empty-state";
+import { Th, Td } from "@/components/data-table";
 import { useClinic } from "@/lib/clinic-store";
 import { toast } from "sonner";
 import { Plus, X } from "lucide-react";
@@ -70,35 +73,50 @@ function SettingsPage() {
             <Plus className="size-3.5" /> Add procedure
           </Button>
         </div>
-        <div className="p-5 space-y-2">
-          {state.settings.commonProcedures.map((p, i) => (
-            <div key={i} className="flex gap-2">
-              <Input
-                value={p.name}
-                onChange={(e) => updateProc(i, { name: e.target.value })}
-                className="flex-[2]"
-              />
-              <Input
-                type="number"
-                step="0.01"
-                value={p.cost}
-                onChange={(e) => updateProc(i, { cost: parseFloat(e.target.value) || 0 })}
-                className="flex-1"
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={() => removeProc(i)}
-              >
-                <X className="size-4 text-destructive" />
-              </Button>
-            </div>
-          ))}
-          {state.settings.commonProcedures.length === 0 && (
-            <p className="text-sm text-muted-foreground">No procedures yet.</p>
-          )}
-        </div>
+        {state.settings.commonProcedures.length === 0 ? (
+          <EmptyState
+            size="sm"
+            title="No procedures yet"
+            desc="Add your clinic's common procedures and their default prices."
+          />
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground">
+              <tr>
+                <Th>Procedure</Th>
+                <Th className="w-40">Default cost</Th>
+                <Th className="w-10" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {state.settings.commonProcedures.map((p, i) => (
+                <tr key={i}>
+                  <Td>
+                    <Input
+                      value={p.name}
+                      onChange={(e) => updateProc(i, { name: e.target.value })}
+                      className="border-transparent bg-transparent shadow-none hover:border-input focus-visible:border-input focus-visible:bg-card"
+                    />
+                  </Td>
+                  <Td>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={p.cost}
+                      onChange={(e) => updateProc(i, { cost: parseFloat(e.target.value) || 0 })}
+                      className="border-transparent bg-transparent shadow-none hover:border-input focus-visible:border-input focus-visible:bg-card"
+                    />
+                  </Td>
+                  <Td className="text-right">
+                    <Button type="button" variant="ghost" size="icon" onClick={() => removeProc(i)}>
+                      <X className="size-4 text-destructive" />
+                    </Button>
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </Card>
 
 
@@ -106,22 +124,11 @@ function SettingsPage() {
       <Card className="p-5">
         <h3 className="font-semibold text-[15px] mb-4">Database stats</h3>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
-          <Stat label="Patients" value={state.patients.length} />
-          <Stat label="Visits" value={state.visits.length} />
-          <Stat label="Payments" value={state.payments.length} />
+          <MetricStat label="Patients" value={state.patients.length} />
+          <MetricStat label="Visits" value={state.visits.length} />
+          <MetricStat label="Payments" value={state.payments.length} />
         </div>
       </Card>
     </>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div>
-      <div className="text-[11px] uppercase tracking-wider font-medium text-muted-foreground">
-        {label}
-      </div>
-      <div className="font-semibold mt-1">{value}</div>
-    </div>
   );
 }

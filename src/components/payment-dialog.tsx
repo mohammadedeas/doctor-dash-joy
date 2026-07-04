@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useClinic } from "@/lib/clinic-store";
+import type { PaymentMethod } from "@/lib/clinic-types";
 
 import { fmtDate, fmtMoney, patientStats, todayISO, visitPaymentStatus } from "@/lib/clinic-utils";
 import { toast } from "sonner";
@@ -49,6 +50,7 @@ export function PaymentDialog({ open, onOpenChange, paymentId, defaultPatientId 
 
   const [date, setDate] = useState(todayISO());
   const [notes, setNotes] = useState("");
+  const [method, setMethod] = useState<PaymentMethod>("Cash");
   const [selectedProcs, setSelectedProcs] = useState<string[]>([]);
 
   useEffect(() => {
@@ -96,7 +98,7 @@ export function PaymentDialog({ open, onOpenChange, paymentId, defaultPatientId 
       visitId: visitId === NONE_VISIT ? null : visitId,
       date,
       amount: amt,
-      method: "Cash",
+      method,
       notes: notes.trim(),
       procedureNames: selectedProcs.length > 0 ? selectedProcs : undefined,
     });
@@ -227,6 +229,20 @@ export function PaymentDialog({ open, onOpenChange, paymentId, defaultPatientId 
               <Label>Date *</Label>
               <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
             </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Method</Label>
+            <Select value={method} onValueChange={(v) => setMethod(v as PaymentMethod)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {["Cash", "Card", "Bank Transfer", "Insurance", "Other"].map((m) => (
+                  <SelectItem key={m} value={m}>{m}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-1.5">

@@ -1,6 +1,8 @@
 import { Router, Request, Response } from "express";
 import db from "../db.js";
 import { randomUUID } from "crypto";
+import { handleError, parsePagination } from "../lib/http.js";
+import { validateBody, appointmentCreateSchema, appointmentUpdateSchema } from "../lib/schemas.js";
 
 const router = Router();
 
@@ -38,10 +40,15 @@ router.get("/", async (req: Request, res: Response) => {
     }
 
     sql += " ORDER BY date ASC, start_time ASC";
+    const { limit, offset } = parsePagination(req.query);
+    if (limit !== undefined) {
+      sql += " LIMIT ? OFFSET ?";
+      args.push(limit, offset);
+    }
     const rs = await db.execute({ sql, args });
     res.json(rs.rows.map(mapRow));
   } catch (err) {
-    res.status(500).json({ error: String(err) });
+    handleError(res, err, "appointments");
   }
 });
 
@@ -54,7 +61,7 @@ router.get("/today", async (_req: Request, res: Response) => {
     });
     res.json(rs.rows.map(mapRow));
   } catch (err) {
-    res.status(500).json({ error: String(err) });
+    handleError(res, err, "appointments");
   }
 });
 
@@ -72,7 +79,7 @@ router.get("/upcoming", async (_req: Request, res: Response) => {
     });
     res.json(rs.rows.map(mapRow));
   } catch (err) {
-    res.status(500).json({ error: String(err) });
+    handleError(res, err, "appointments");
   }
 });
 
@@ -86,17 +93,14 @@ router.get("/:id", async (req: Request, res: Response) => {
     if (!rs.rows.length) return res.status(404).json({ error: "Appointment not found" });
     res.json(mapRow(rs.rows[0]));
   } catch (err) {
-    res.status(500).json({ error: String(err) });
+    handleError(res, err, "appointments");
   }
 });
 
 // ── Create appointment ──────────────────────────────────────────────
-router.post("/", async (req: Request, res: Response) => {
+router.post("/", validateBody(appointmentCreateSchema), async (req: Request, res: Response) => {
   try {
     const { patientId, patientName, phone, visitType, dentistName, date, startTime, endTime, notes, status, paymentStatus } = req.body;
-    if (!patientId || !patientName || !date || !startTime || !endTime) {
-      return res.status(400).json({ error: "Missing required fields" });
-    }
 
     const conflict = await findConflict(date, startTime, endTime, dentistName, null);
     if (conflict) {
@@ -113,12 +117,12 @@ router.post("/", async (req: Request, res: Response) => {
     const rs = await db.execute({ sql: "SELECT * FROM appointments WHERE id = ?", args: [id] });
     res.status(201).json(mapRow(rs.rows[0]));
   } catch (err) {
-    res.status(500).json({ error: String(err) });
+    handleError(res, err, "appointments");
   }
 });
 
 // ── Update appointment ──────────────────────────────────────────────
-router.put("/:id", async (req: Request, res: Response) => {
+router.put("/:id", validateBody(appointmentUpdateSchema), async (req: Request, res: Response) => {
   try {
     const { patientId, patientName, phone, visitType, dentistName, date, startTime, endTime, notes, status, paymentStatus } = req.body;
     const existing = await db.execute({ sql: "SELECT 1 FROM appointments WHERE id = ?", args: [String(req.params.id)] });
@@ -144,7 +148,7 @@ router.put("/:id", async (req: Request, res: Response) => {
     const rs = await db.execute({ sql: "SELECT * FROM appointments WHERE id = ?", args: [String(req.params.id)] });
     res.json(mapRow(rs.rows[0]));
   } catch (err) {
-    res.status(500).json({ error: String(err) });
+    handleError(res, err, "appointments");
   }
 });
 
@@ -154,7 +158,7 @@ router.delete("/:id", async (req: Request, res: Response) => {
     await db.execute({ sql: "DELETE FROM appointments WHERE id = ?", args: [String(req.params.id)] });
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ error: String(err) });
+    handleError(res, err, "appointments");
   }
 });
 

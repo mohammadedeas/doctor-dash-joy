@@ -1,6 +1,9 @@
 import { Router, Request, Response } from "express";
 import db from "../db.js";
 import { randomUUID } from "crypto";
+import { requireAdmin } from "./auth.js";
+import { handleError } from "../lib/http.js";
+import { validateBody, settingsUpdateSchema } from "../lib/schemas.js";
 
 const router = Router();
 
@@ -9,12 +12,12 @@ router.get("/", async (_req: Request, res: Response) => {
   try {
     res.json(await getSettings());
   } catch (err) {
-    res.status(500).json({ error: String(err) });
+    handleError(res, err, "settings");
   }
 });
 
 // ── Update settings ─────────────────────────────────────────────────
-router.put("/", async (req: Request, res: Response) => {
+router.put("/", validateBody(settingsUpdateSchema), async (req: Request, res: Response) => {
   try {
     const { clinicName, currency, commonProcedures } = req.body;
     const tx = await db.transaction("write");
@@ -45,7 +48,7 @@ router.put("/", async (req: Request, res: Response) => {
       throw err;
     }
   } catch (err) {
-    res.status(500).json({ error: String(err) });
+    handleError(res, err, "settings");
   }
 });
 
@@ -54,18 +57,19 @@ router.get("/state", async (_req: Request, res: Response) => {
   try {
     res.json(await getFullState());
   } catch (err) {
-    res.status(500).json({ error: String(err) });
+    handleError(res, err, "settings");
   }
 });
 
 // ── Replace all state (import) ──────────────────────────────────────
-router.put("/state", async (req: Request, res: Response) => {
+router.put("/state", requireAdmin, async (req: Request, res: Response) => {
   try {
     const { patients, visits, payments, appointments, settings } = req.body;
     const tx = await db.transaction("write");
 
     try {
       // Clear everything
+      await tx.execute("DELETE FROM tooth_treatments");
       await tx.execute("DELETE FROM visit_procedures");
       await tx.execute("DELETE FROM payments");
       await tx.execute("DELETE FROM visits");
@@ -82,6 +86,21 @@ router.put("/state", async (req: Request, res: Response) => {
           args: [
             p.id, p.name, p.phone || "", p.email || "", p.dob || "",
             p.gender || "", p.address || "", p.medicalNotes || "", p.createdAt || new Date().toISOString()
+          ]
+        });
+      }
+
+      // Insert tooth treatments
+      for (const t of (req.body.toothTreatments || [])) {
+        await tx.execute({
+          sql: `
+            INSERT INTO tooth_treatments (id, patient_id, visit_id, tooth_number, procedure, status, notes, cost, created_at, doctor_name)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `,
+          args: [
+            t.id, t.patientId, t.visitId, t.toothNumber, t.procedure,
+            t.status || "Planned", t.notes || "", t.cost || 0,
+            t.createdAt || new Date().toISOString(), t.doctorName || ""
           ]
         });
       }
@@ -161,12 +180,12 @@ router.put("/state", async (req: Request, res: Response) => {
       throw err;
     }
   } catch (err) {
-    res.status(500).json({ error: String(err) });
+    handleError(res, err, "settings");
   }
 });
 
 // ── Clear all data ──────────────────────────────────────────────────
-router.delete("/state", async (_req: Request, res: Response) => {
+router.delete("/state", requireAdmin, async (_req: Request, res: Response) => {
   try {
     const tx = await db.transaction("write");
     try {
@@ -202,7 +221,7 @@ router.delete("/state", async (_req: Request, res: Response) => {
       throw err;
     }
   } catch (err) {
-    res.status(500).json({ error: String(err) });
+    handleError(res, err, "settings");
   }
 });
 
@@ -236,19 +255,27 @@ async function getFullState() {
 
   // Visits
   const visitRs = await db.execute("SELECT * FROM visits ORDER BY date DESC");
-  const visits = await Promise.all(visitRs.rows.map(async (r) => {
+  const visitIds = visitRs.rows.map((r) => r.id as string);
+  const procsByVisit = new Map<string, { name: string; cost: number }[]>();
+  if (visitIds.length > 0) {
+    const placeholders = visitIds.map(() => "?").join(",");
     const procsRs = await db.execute({
-      sql: "SELECT name, cost FROM visit_procedures WHERE visit_id = ?",
-      args: [r.id]
+      sql: `SELECT visit_id, name, cost FROM visit_procedures WHERE visit_id IN (${placeholders})`,
+      args: visitIds,
     });
-    return {
-      id: r.id,
-      patientId: r.patient_id,
-      date: r.date,
-      procedures: procsRs.rows,
-      totalCost: r.total_cost,
-      notes: r.notes || undefined,
-    };
+    for (const p of procsRs.rows) {
+      const list = procsByVisit.get(p.visit_id as string) || [];
+      list.push({ name: p.name as string, cost: p.cost as number });
+      procsByVisit.set(p.visit_id as string, list);
+    }
+  }
+  const visits = visitRs.rows.map((r) => ({
+    id: r.id,
+    patientId: r.patient_id,
+    date: r.date,
+    procedures: procsByVisit.get(r.id as string) || [],
+    totalCost: r.total_cost,
+    notes: r.notes || undefined,
   }));
 
   // Payments
@@ -284,11 +311,27 @@ async function getFullState() {
     createdAt: r.created_at,
   }));
 
+  // Tooth Treatments
+  const ttRs = await db.execute("SELECT * FROM tooth_treatments ORDER BY created_at DESC");
+  const toothTreatments = ttRs.rows.map((r) => ({
+    id: r.id,
+    patientId: r.patient_id,
+    visitId: r.visit_id,
+    toothNumber: r.tooth_number,
+    procedure: r.procedure,
+    status: r.status,
+    notes: r.notes || undefined,
+    cost: r.cost || 0,
+    createdAt: r.created_at,
+    doctorName: r.doctor_name || undefined,
+  }));
+
   return {
     patients,
     visits,
     payments,
     appointments,
+    toothTreatments,
     settings: await getSettings(),
   };
 }

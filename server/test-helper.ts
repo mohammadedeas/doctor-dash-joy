@@ -24,16 +24,17 @@ export function cleanTestDb() {
 export async function createTestUser(
   username = "testuser",
   password = "testpass123",
-  name = "Test User"
+  name = "Test User",
+  role: "user" | "admin" = "user"
 ) {
   const bcrypt = await import("bcryptjs");
   const hash = await bcrypt.default.hash(password, 12);
   const id = `usr_${Date.now()}`;
   await db.execute({
     sql: "INSERT INTO users (id, username, password_hash, name, role, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-    args: [id, username, hash, name, "user", new Date().toISOString()],
+    args: [id, username, hash, name, role, new Date().toISOString()],
   });
-  return { id, username, password, name };
+  return { id, username, password, name, role };
 }
 
 export async function getAuthToken(

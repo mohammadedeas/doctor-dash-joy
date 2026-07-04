@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -8,6 +8,8 @@ import { Avatar } from "@/components/patient-avatar";
 import { useClinic } from "@/lib/clinic-store";
 import { fmtMoney, patientStats } from "@/lib/clinic-utils";
 import { PatientDialog } from "@/components/patient-dialog";
+import { EmptyState } from "@/components/empty-state";
+import { Th, Td } from "@/components/data-table";
 import { Plus, Search, Users } from "lucide-react";
 
 export const Route = createFileRoute("/patients/")({
@@ -21,6 +23,15 @@ function PatientsPage() {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const openNew = () => {
+      setEditId(null);
+      setOpen(true);
+    };
+    window.addEventListener("new-patient", openNew);
+    return () => window.removeEventListener("new-patient", openNew);
+  }, []);
 
   const filtered = useMemo(() => {
     const query = q.toLowerCase();
@@ -63,30 +74,27 @@ function PatientsPage() {
 
       <Card className="overflow-hidden p-0">
         {filtered.length === 0 ? (
-          <div className="text-center py-16 px-4">
-            <div className="mx-auto size-12 rounded-full bg-muted flex items-center justify-center mb-3 text-muted-foreground">
-              <Users className="size-5" />
-            </div>
-            <h3 className="font-medium text-sm">
-              {state.patients.length === 0 ? "No patients yet" : "No patients match your search"}
-            </h3>
-            <p className="text-xs text-muted-foreground mt-1">
-              {state.patients.length === 0
+          <EmptyState
+            size="lg"
+            icon={<Users className="size-5" />}
+            title={state.patients.length === 0 ? "No patients yet" : "No patients match your search"}
+            desc={
+              state.patients.length === 0
                 ? "Add your first patient to get started."
-                : "Try a different search term."}
-            </p>
-          </div>
+                : "Try a different search term."
+            }
+          />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-muted/50 text-xs uppercase tracking-wider text-muted-foreground">
                 <tr>
-                  <th className="px-4 py-2.5 text-left font-medium">Name</th>
-                  <th className="px-4 py-2.5 text-left font-medium">Phone</th>
-                  <th className="px-4 py-2.5 text-left font-medium">Visits</th>
-                  <th className="px-4 py-2.5 text-left font-medium">Total Billed</th>
-                  <th className="px-4 py-2.5 text-left font-medium">Balance</th>
-                  <th className="px-4 py-2.5" />
+                  <Th>Name</Th>
+                  <Th>Phone</Th>
+                  <Th>Visits</Th>
+                  <Th>Total Billed</Th>
+                  <Th>Balance</Th>
+                  <Th />
                 </tr>
               </thead>
               <tbody>
@@ -100,23 +108,23 @@ function PatientsPage() {
                         navigate({ to: "/patients/$patientId", params: { patientId: p.id } })
                       }
                     >
-                      <td className="px-4 py-3">
+                      <Td>
                         <div className="flex items-center gap-2.5">
                           <Avatar name={p.name} size={32} />
                           <span className="font-medium">{p.name}</span>
                         </div>
-                      </td>
-                      <td className="px-4 py-3">{p.phone || "—"}</td>
-                      <td className="px-4 py-3">{st.visitCount}</td>
-                      <td className="px-4 py-3">{fmtMoney(st.totalBilled, currency)}</td>
-                      <td className="px-4 py-3">
+                      </Td>
+                      <Td>{p.phone || "—"}</Td>
+                      <Td>{st.visitCount}</Td>
+                      <Td>{fmtMoney(st.totalBilled, currency)}</Td>
+                      <Td>
                         <span
                           className={`font-semibold ${st.balance > 0 ? "text-destructive" : ""}`}
                         >
                           {fmtMoney(st.balance, currency)}
                         </span>
-                      </td>
-                      <td className="px-4 py-3 text-right">
+                      </Td>
+                      <Td className="text-right">
                         <Button
                           variant="outline"
                           size="sm"
@@ -128,7 +136,7 @@ function PatientsPage() {
                         >
                           Edit
                         </Button>
-                      </td>
+                      </Td>
                     </tr>
                   );
                 })}

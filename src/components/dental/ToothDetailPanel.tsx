@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { ToothClinicalData } from "./types";
 import type { ToothMeta } from "./constants";
+import type { ToothTreatment } from "@/lib/clinic-types";
 import { EndoPanel } from "./EndoPanel";
 import { PerioPanel } from "./PerioPanel";
 import { ConditionsPanel } from "./ConditionsPanel";
@@ -17,11 +18,12 @@ import { cn } from "@/lib/utils";
 interface ToothDetailPanelProps {
   tooth: ToothMeta;
   data: ToothClinicalData;
+  treatmentHistory?: ToothTreatment[];
   onClose: () => void;
   onUpdate: (data: ToothClinicalData) => void;
 }
 
-export function ToothDetailPanel({ tooth, data, onClose, onUpdate }: ToothDetailPanelProps) {
+export function ToothDetailPanel({ tooth, data, treatmentHistory = [], onClose, onUpdate }: ToothDetailPanelProps) {
   const [localData, setLocalData] = useState<ToothClinicalData>(data);
   const [activeTab, setActiveTab] = useState("conditions");
 
@@ -51,13 +53,20 @@ export function ToothDetailPanel({ tooth, data, onClose, onUpdate }: ToothDetail
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20, scale: 0.96 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: 20, scale: 0.96 }}
-      transition={{ type: "spring", stiffness: 350, damping: 30 }}
-      className="fixed inset-x-0 bottom-0 z-50 sm:absolute sm:inset-auto sm:right-0 sm:top-0 sm:w-[440px] sm:ml-4"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
     >
-      <div className="bg-card border border-border shadow-2xl rounded-t-2xl sm:rounded-2xl overflow-hidden max-h-[85vh] sm:max-h-none flex flex-col">
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+
+      {/* Panel */}
+      <div
+        className="relative w-full max-w-lg max-h-[85vh] flex flex-col bg-card border border-border shadow-2xl rounded-2xl overflow-hidden animate-in zoom-in-95 fade-in duration-200"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-card">
           <div className="flex items-center gap-3">
@@ -102,7 +111,7 @@ export function ToothDetailPanel({ tooth, data, onClose, onUpdate }: ToothDetail
             </TabsList>
           </div>
 
-          <ScrollArea className="flex-1 max-h-[55vh] sm:max-h-[600px]">
+          <ScrollArea className="flex-1 min-h-0">
             <div className="p-4">
               <TabsContent value="conditions" className="mt-0">
                 <ConditionsPanel
@@ -134,16 +143,14 @@ export function ToothDetailPanel({ tooth, data, onClose, onUpdate }: ToothDetail
 
               <TabsContent value="history" className="mt-0">
                 <ToothHistoryPanel
-                  history={[
-                    {
-                      id: "h1",
-                      date: new Date().toISOString(),
-                      type: "note",
-                      title: "Initial examination",
-                      description: "Tooth appears healthy with no visible caries.",
-                      performedBy: "Dr. Smith",
-                    },
-                  ]}
+                  history={treatmentHistory.map((t) => ({
+                    id: t.id,
+                    date: t.createdAt,
+                    type: "procedure" as const,
+                    title: t.procedure,
+                    description: `${t.status}${t.notes ? " — " + t.notes : ""}`,
+                    performedBy: t.doctorName,
+                  }))}
                 />
               </TabsContent>
 

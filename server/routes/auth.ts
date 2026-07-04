@@ -22,12 +22,21 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction) 
     const decoded = jwt.verify(token, JWT_SECRET!) as {
       userId: string;
       username: string;
+      role: string;
     };
     (req as any).user = decoded;
     next();
   } catch {
     return res.status(401).json({ error: "Invalid or expired token" });
   }
+}
+
+export function requireAdmin(req: Request, res: Response, next: NextFunction) {
+  const user = (req as any).user as { role?: string } | undefined;
+  if (user?.role !== "admin") {
+    return res.status(403).json({ error: "Admin access required" });
+  }
+  next();
 }
 
 const loginLimiter = rateLimit({
@@ -63,9 +72,11 @@ router.post("/login", loginLimiter, async (req, res) => {
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
-    const token = jwt.sign({ userId: user.id, username: user.username }, JWT_SECRET, {
-      expiresIn: "7d",
-    });
+    const token = jwt.sign(
+      { userId: user.id, username: user.username, role: user.role },
+      JWT_SECRET,
+      { expiresIn: "7d" }
+    );
 
     return res.json({
       token,

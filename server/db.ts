@@ -18,6 +18,8 @@ const db = createClient({
 
 // ── Schema Initialization ───────────────────────────────────────────
 export async function initDB() {
+  await db.execute("PRAGMA foreign_keys = ON");
+
   await db.executeMultiple(`
     CREATE TABLE IF NOT EXISTS patients (
       id          TEXT PRIMARY KEY,
@@ -56,7 +58,8 @@ export async function initDB() {
       amount      REAL DEFAULT 0,
       method      TEXT DEFAULT 'Cash',
       notes       TEXT DEFAULT '',
-      FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
+      FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE,
+      FOREIGN KEY (visit_id)   REFERENCES visits(id)   ON DELETE SET NULL
     );
 
     CREATE TABLE IF NOT EXISTS settings (
@@ -86,8 +89,42 @@ export async function initDB() {
       notes          TEXT DEFAULT '',
       status         TEXT DEFAULT 'pending',
       payment_status TEXT DEFAULT 'unpaid',
-      created_at     TEXT NOT NULL
+      created_at     TEXT NOT NULL,
+      FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS tooth_treatments (
+      id           TEXT PRIMARY KEY,
+      patient_id   TEXT NOT NULL,
+      visit_id     TEXT NOT NULL,
+      tooth_number INTEGER NOT NULL,
+      procedure    TEXT NOT NULL,
+      status       TEXT NOT NULL DEFAULT 'Planned',
+      notes        TEXT DEFAULT '',
+      cost         REAL DEFAULT 0,
+      created_at   TEXT NOT NULL,
+      doctor_name  TEXT DEFAULT '',
+      FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE,
+      FOREIGN KEY (visit_id)   REFERENCES visits(id)   ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS dental_chart_data (
+      patient_id TEXT PRIMARY KEY,
+      teeth      TEXT NOT NULL DEFAULT '{}',
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_visits_patient_id ON visits(patient_id);
+    CREATE INDEX IF NOT EXISTS idx_visit_procedures_visit_id ON visit_procedures(visit_id);
+    CREATE INDEX IF NOT EXISTS idx_payments_patient_id ON payments(patient_id);
+    CREATE INDEX IF NOT EXISTS idx_payments_visit_id ON payments(visit_id);
+    CREATE INDEX IF NOT EXISTS idx_appointments_patient_id ON appointments(patient_id);
+    CREATE INDEX IF NOT EXISTS idx_appointments_date ON appointments(date);
+    CREATE INDEX IF NOT EXISTS idx_appointments_dentist_name ON appointments(dentist_name);
+    CREATE INDEX IF NOT EXISTS idx_appointments_status ON appointments(status);
+    CREATE INDEX IF NOT EXISTS idx_tooth_treatments_patient_id ON tooth_treatments(patient_id);
+    CREATE INDEX IF NOT EXISTS idx_tooth_treatments_visit_id ON tooth_treatments(visit_id);
   `);
 
   // Migrate: add procedure_names to payments if missing

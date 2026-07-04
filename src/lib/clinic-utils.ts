@@ -1,4 +1,5 @@
 import type { ClinicState, Visit } from "./clinic-types";
+import type { BadgeTone } from "@/components/status-badge";
 
 export const uid = () =>
   Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
@@ -51,6 +52,12 @@ export const calcAge = (dob?: string) => {
   return age;
 };
 
+export function clinicFinancialSummary(state: ClinicState) {
+  const totalBilled = state.visits.reduce((s, v) => s + (v.totalCost || 0), 0);
+  const totalPaid = state.payments.reduce((s, p) => s + (p.amount || 0), 0);
+  return { totalBilled, totalPaid, outstanding: totalBilled - totalPaid };
+}
+
 export function patientStats(state: ClinicState, patientId: string) {
   const visits = state.visits.filter((v) => v.patientId === patientId);
   const payments = state.payments.filter((p) => p.patientId === patientId);
@@ -66,7 +73,7 @@ export function patientStats(state: ClinicState, patientId: string) {
 
 export type VisitStatus = {
   label: "Paid" | "Partial" | "Unpaid";
-  variant: "paid" | "partial" | "unpaid";
+  tone: BadgeTone;
   paid: number;
 };
 
@@ -75,7 +82,18 @@ export function visitPaymentStatus(state: ClinicState, visit: Visit): VisitStatu
     .filter((p) => p.visitId === visit.id)
     .reduce((s, p) => s + p.amount, 0);
   const total = visit.totalCost || 0;
-  if (paid >= total && total > 0) return { label: "Paid", variant: "paid", paid };
-  if (paid > 0) return { label: "Partial", variant: "partial", paid };
-  return { label: "Unpaid", variant: "unpaid", paid };
+  if (paid >= total && total > 0) return { label: "Paid", tone: "success", paid };
+  if (paid > 0) return { label: "Partial", tone: "warn", paid };
+  return { label: "Unpaid", tone: "destructive", paid };
+}
+
+const APPOINTMENT_STATUS_TONE: Record<string, BadgeTone> = {
+  confirmed: "info",
+  pending: "warn",
+  completed: "success",
+  cancelled: "destructive",
+};
+
+export function appointmentStatusTone(status: string): BadgeTone {
+  return APPOINTMENT_STATUS_TONE[status] ?? "neutral";
 }

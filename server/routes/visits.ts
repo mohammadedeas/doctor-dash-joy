@@ -1,17 +1,26 @@
 import { Router, Request, Response } from "express";
 import db from "../db.js";
 import { randomUUID } from "crypto";
+import { handleError, parsePagination } from "../lib/http.js";
+import { validateBody, visitCreateSchema, visitUpdateSchema } from "../lib/schemas.js";
 
 const router = Router();
 
 // ── List all visits ─────────────────────────────────────────────────
-router.get("/", async (_req: Request, res: Response) => {
+router.get("/", async (req: Request, res: Response) => {
   try {
-    const rs = await db.execute("SELECT * FROM visits ORDER BY date DESC");
-    const visits = await Promise.all(rs.rows.map(row => enrichVisit(row)));
+    const { limit, offset } = parsePagination(req.query);
+    let sql = "SELECT * FROM visits ORDER BY date DESC";
+    const args: number[] = [];
+    if (limit !== undefined) {
+      sql += " LIMIT ? OFFSET ?";
+      args.push(limit, offset);
+    }
+    const rs = await db.execute({ sql, args });
+    const visits = await enrichVisits(rs.rows);
     res.json(visits);
   } catch (err) {
-    res.status(500).json({ error: String(err) });
+    handleError(res, err, "visits");
   }
 });
 
@@ -23,14 +32,13 @@ router.get("/:id", async (req: Request, res: Response) => {
     if (!row) return res.status(404).json({ error: "Visit not found" });
     res.json(await enrichVisit(row));
   } catch (err) {
-    res.status(500).json({ error: String(err) });
+    handleError(res, err, "visits");
   }
 });
 
 // ── Create visit ────────────────────────────────────────────────────
-router.post("/", async (req: Request, res: Response) => {
+router.post("/", validateBody(visitCreateSchema), async (req: Request, res: Response) => {
   const { patientId, date, procedures, totalCost, notes } = req.body;
-  if (!patientId || !date) return res.status(400).json({ error: "patientId and date are required" });
 
   const id = randomUUID().slice(0, 12);
   const tx = await db.transaction("write");
@@ -55,12 +63,12 @@ router.post("/", async (req: Request, res: Response) => {
     res.status(201).json(await enrichVisit(rs.rows[0]));
   } catch (err) {
     await tx.rollback();
-    res.status(500).json({ error: String(err) });
+    handleError(res, err, "visits");
   }
 });
 
 // ── Update visit ────────────────────────────────────────────────────
-router.put("/:id", async (req: Request, res: Response) => {
+router.put("/:id", validateBody(visitUpdateSchema), async (req: Request, res: Response) => {
   try {
     const rsEx = await db.execute({ sql: "SELECT * FROM visits WHERE id = ?", args: [req.params.id as string] });
     const existing = rsEx.rows[0];
@@ -99,7 +107,7 @@ router.put("/:id", async (req: Request, res: Response) => {
       throw err;
     }
   } catch (err) {
-    res.status(500).json({ error: String(err) });
+    handleError(res, err, "visits");
   }
 });
 
@@ -120,11 +128,36 @@ router.delete("/:id", async (req: Request, res: Response) => {
       throw err;
     }
   } catch (err) {
-    res.status(500).json({ error: String(err) });
+    handleError(res, err, "visits");
   }
 });
 
-// ── Helper: enrich visit with procedures array ──────────────────────
+// ── Helper: enrich a batch of visit rows with their procedures in one query ──
+async function enrichVisits(rows: any[]) {
+  if (rows.length === 0) return [];
+  const ids = rows.map((r) => r.id);
+  const placeholders = ids.map(() => "?").join(",");
+  const rs = await db.execute({
+    sql: `SELECT visit_id, name, cost FROM visit_procedures WHERE visit_id IN (${placeholders})`,
+    args: ids,
+  });
+  const byVisit = new Map<string, { name: string; cost: number }[]>();
+  for (const r of rs.rows) {
+    const list = byVisit.get(r.visit_id as string) || [];
+    list.push({ name: r.name as string, cost: r.cost as number });
+    byVisit.set(r.visit_id as string, list);
+  }
+  return rows.map((row) => ({
+    id: row.id,
+    patientId: row.patient_id,
+    date: row.date,
+    procedures: byVisit.get(row.id) || [],
+    totalCost: row.total_cost,
+    notes: row.notes || undefined,
+  }));
+}
+
+// ── Helper: enrich a single visit with its procedures ────────────────
 async function enrichVisit(row: any) {
   const rs = await db.execute({
     sql: "SELECT name, cost FROM visit_procedures WHERE visit_id = ?",
